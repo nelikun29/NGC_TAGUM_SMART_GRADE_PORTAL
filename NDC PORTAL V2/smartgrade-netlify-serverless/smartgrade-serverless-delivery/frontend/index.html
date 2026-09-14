@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Grade &amp; Attendance Portal</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script>
+  tailwind.config = {
+    theme: { extend: { colors: {
+      eduBlue: { 50:'#f0f7ff',100:'#e0effe',500:'#1d4ed8',600:'#1e40af',700:'#1d3557',800:'#0f172a' },
+      eduYellow: { 100:'#fef9c3',400:'#facc15',500:'#eab308',600:'#ca8a04' }
+    }, fontFamily: { sans: ['Inter','sans-serif'] } } }
+  }
+</script>
+<style>
+  body {
+    font-family:'Inter',sans-serif;
+    background: radial-gradient(circle at top left, #eef4ff 0%, #f8fafc 45%, #f1f5f9 100%);
+    background-attachment: fixed;
+  }
+
+  /* ---------- Glass + shadow system ---------- */
+  .glass-card {
+    background: rgba(255,255,255,.72);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid rgba(255,255,255,.6);
+    box-shadow: 0 4px 6px -1px rgba(15,23,42,.05), 0 10px 24px -8px rgba(30,64,175,.12);
+    transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+  }
+  .glass-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px -4px rgba(15,23,42,.08), 0 20px 36px -10px rgba(30,64,175,.20);
+    border-color: rgba(147,197,253,.7);
+  }
+
+  /* Stat cards on dashboards get a slightly stronger lift + icon pulse */
+  .stat-card { cursor: default; }
+  .stat-card:hover i { transform: scale(1.15) rotate(-4deg); }
+  .stat-card i { transition: transform .25s ease; display:inline-block; }
+
+  /* Buttons: subtle lift + shadow bloom on hover */
+  button, .btn-hover {
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+  }
+  button:not(:disabled):hover, .btn-hover:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+  }
+  button:not(:disabled):active { transform: translateY(0); }
+
+  /* Row hover in tables */
+  table.gradebook tbody tr { transition: background-color .15s ease; }
+  table.gradebook tbody tr:hover { background-color: rgba(29,64,175,.05); }
+
+  /* Fade-in for freshly rendered sections */
+  @keyframes fadeSlideIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+  #student-section, #teacher-section, #admin-section { animation: fadeSlideIn .35s ease both; }
+
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+  .tab-btn { transition: color .15s ease, background-color .15s ease; }
+  .tab-btn.active { border-bottom:2px solid #1e40af; color:#1e40af; background:#fff; font-weight:700; }
+  .tab-btn:not(.active):hover { color:#1e40af; background: rgba(29,64,175,.05); }
+  table.gradebook th, table.gradebook td { padding:.5rem .75rem; font-size:.8rem; }
+  @media print { .no-print{display:none!important;} }
+</style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col antialiased">
+
+<div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none no-print"></div>
+
+<header class="bg-eduBlue-700 text-white shadow-lg sticky top-0 z-40 no-print">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-20">
+      <div class="flex items-center space-x-3 cursor-pointer group" onclick="Views.home()">
+        <img src="./assets/logo.png" alt="NDC-Tagum Foundation, Inc." class="w-12 h-12 rounded-full shadow-lg ring-2 ring-eduYellow-400/70 transition-transform duration-200 group-hover:scale-105 bg-white object-contain">
+        <div class="hidden md:block h-10 w-px bg-white/20 mx-1"></div>
+        <div>
+          <p id="institution-name-header" class="text-[11px] sm:text-xs font-bold text-eduYellow-400 tracking-wide leading-none uppercase">NDC-Tagum Foundation, Inc.</p>
+          <h1 class="font-extrabold text-base sm:text-lg tracking-wide leading-tight mt-0.5">SMART GRADE <span class="text-eduYellow-400">&amp;</span> ATTENDANCE</h1>
+          <p class="text-[11px] text-blue-200 hidden sm:block font-medium">Server-backed Academic Portal</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <div id="user-header-profile" class="hidden items-center gap-3 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
+          <div class="w-9 h-9 rounded-full bg-eduYellow-400 text-eduBlue-800 font-extrabold flex items-center justify-center text-sm">
+            <span id="user-avatar">?</span>
+          </div>
+          <div class="text-left hidden lg:block">
+            <p id="user-name-display" class="text-sm font-semibold leading-tight">—</p>
+            <span id="user-role-badge" class="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-eduYellow-500 text-eduBlue-800 uppercase">—</span>
+          </div>
+        </div>
+        <button id="logout-btn" onclick="Auth.logout()" class="hidden bg-red-500 hover:bg-red-600 text-white p-2.5 rounded-xl text-sm" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+  <!-- ===================== AUTH ===================== -->
+  <section id="auth-section" class="max-w-md mx-auto my-8">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="bg-eduBlue-700 p-6 text-white text-center">
+        <img src="./assets/logo.png" alt="NDC-Tagum Foundation, Inc." class="w-16 h-16 rounded-full mx-auto mb-3 shadow-lg ring-2 ring-eduYellow-400/70 bg-white object-contain">
+        <p id="institution-name-login" class="text-[11px] font-bold text-eduYellow-400 tracking-wide uppercase">NDC-Tagum Foundation, Inc.</p>
+        <h2 class="text-2xl font-bold mt-1">Portal Access</h2>
+        <p class="text-xs text-blue-200 mt-1">All requests are verified by the server — nothing here is trusted from the browser alone.</p>
+      </div>
+      <div class="flex border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+        <button class="tab-btn active flex-1 py-3" data-tab="login" onclick="Views.authTab('login')">Login</button>
+        <button class="tab-btn flex-1 py-3" data-tab="reg-student" onclick="Views.authTab('reg-student')">Student Reg</button>
+        <button class="tab-btn flex-1 py-3" data-tab="reg-teacher" onclick="Views.authTab('reg-teacher')">Teacher Reg</button>
+      </div>
+      <div class="p-6">
+        <form id="login-form" class="space-y-4" onsubmit="return Auth.login(event)">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Email</label>
+            <input type="email" id="login-email" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
+            <input type="password" id="login-password" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <button class="w-full bg-eduBlue-600 hover:bg-eduBlue-700 text-white font-bold py-3 rounded-xl text-sm">
+            <i class="fa-solid fa-right-to-bracket"></i> Login to Portal
+          </button>
+          <div class="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
+            <p class="font-bold mb-1">Demo accounts (seeded):</p>
+            <p>Admin: admin@portal.edu / Admin!2345</p>
+            <p>Teacher: prof.delacruz@portal.edu / Teacher!2345</p>
+            <p>Student: juan.reyes@portal.edu / Student!2345</p>
+          </div>
+        </form>
+
+        <form id="student-reg-form" class="space-y-3 hidden" onsubmit="return Auth.registerStudent(event)">
+          <input required id="sr-studentNumber" placeholder="Student ID Number *" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <div class="grid grid-cols-3 gap-2">
+            <input required id="sr-firstName" placeholder="First Name *" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+            <input id="sr-middleName" placeholder="Middle" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+            <input required id="sr-lastName" placeholder="Last Name *" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <select id="sr-yearLevel" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+              <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+            </select>
+            <input id="sr-roomNumber" placeholder="Room Number" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <input required type="email" id="sr-email" placeholder="Email *" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <input required type="password" id="sr-password" placeholder="Password (min 8 chars) *" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <button class="w-full bg-eduBlue-600 hover:bg-eduBlue-700 text-white font-bold py-3 rounded-xl text-sm">Register as Student</button>
+        </form>
+
+        <form id="teacher-reg-form" class="space-y-3 hidden" onsubmit="return Auth.registerTeacher(event)">
+          <div class="grid grid-cols-2 gap-2">
+            <input required id="tr-firstName" placeholder="First Name *" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+            <input required id="tr-lastName" placeholder="Last Name *" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <input id="tr-department" placeholder="Department" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <input required type="email" id="tr-email" placeholder="Email *" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <input required type="password" id="tr-password" placeholder="Password (min 8 chars) *" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <p class="text-xs text-slate-500">Teacher accounts require administrator approval before first login.</p>
+          <button class="w-full bg-eduBlue-600 hover:bg-eduBlue-700 text-white font-bold py-3 rounded-xl text-sm">Submit Teacher Registration</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== STUDENT ===================== -->
+  <section id="student-section" class="hidden space-y-6"></section>
+
+  <!-- ===================== TEACHER ===================== -->
+  <section id="teacher-section" class="hidden space-y-6"></section>
+
+  <!-- ===================== ADMIN ===================== -->
+  <section id="admin-section" class="hidden space-y-6"></section>
+
+</main>
+
+<footer class="text-center text-xs text-slate-400 py-4 no-print">Smart Grade &amp; Attendance Portal — Phase 2 (server-backed)</footer>
+
+<script src="./app.js"></script>
+</body>
+</html>

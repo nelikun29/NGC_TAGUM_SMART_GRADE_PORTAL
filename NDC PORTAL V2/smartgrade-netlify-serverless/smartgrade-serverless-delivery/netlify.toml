@@ -1,0 +1,11 @@
+[build]
+  publish = "frontend"
+  functions = "netlify/functions"
+
+# Routes /api/* to the Express app running as a Netlify Function, so the
+# frontend and backend share one origin — no CORS configuration needed in
+# production.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
