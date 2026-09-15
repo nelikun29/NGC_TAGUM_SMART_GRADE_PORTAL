@@ -22,6 +22,35 @@ function isSessionUsable(session) {
 
 // ---------- LIST SESSIONS FOR A CLASS ----------
 router.get('/sessions', requireRole('teacher', 'admin'), requireClassOwnership, async (req, res, next) => {
+  // ---------- LIST SESSIONS FOR A CLASS (COMPATIBILITY ROUTE) ----------
+// Supports:
+// GET /attendance/classes/:classId/sessions
+router.get(
+  '/classes/:classId/sessions',
+  requireRole('teacher', 'admin'),
+  requireClassOwnership,
+  async (req, res, next) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT
+          s.*,
+          (
+            SELECT COUNT(*)
+            FROM attendance_records ar
+            WHERE ar.session_id = s.id
+          ) AS recorded_count
+        FROM attendance_sessions s
+        WHERE s.class_id = $1
+        ORDER BY s.session_date DESC, s.opened_at DESC
+      `, [req.params.classId]);
+
+      res.json(rows);
+
+    } catch (e) {
+      next(e);
+    }
+  }
+);
   try {
     const { rows } = await pool.query(`
       SELECT s.*, (SELECT COUNT(*) FROM attendance_records ar WHERE ar.session_id = s.id) AS recorded_count
