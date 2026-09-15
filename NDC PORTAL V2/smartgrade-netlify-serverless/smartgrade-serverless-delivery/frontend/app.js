@@ -1823,13 +1823,16 @@ const Student = {
 const Teacher = {
 
   state: {
-
     classId: null,
-
     tab: 'gradebook'
-
   },
 
+  _classes: [],
+
+
+  // ==========================================================
+  // MAIN TEACHER DASHBOARD
+  // ==========================================================
 
   async render() {
 
@@ -1838,9 +1841,12 @@ const Teacher = {
         'teacher-section'
       );
 
-
     if (!el) return;
 
+
+    // --------------------------------------------------------
+    // LOAD CLASSES
+    // --------------------------------------------------------
 
     const classes =
       await api(
@@ -1849,256 +1855,1652 @@ const Teacher = {
       ).catch(() => []);
 
 
+    Teacher._classes =
+      Array.isArray(classes)
+        ? classes
+        : [];
+
+
+    // --------------------------------------------------------
+    // PRESERVE SELECTED CLASS
+    // --------------------------------------------------------
+
     if (
-      !Teacher.state.classId &&
-      classes.length
+      Teacher._classes.length > 0
     ) {
 
+      const stillExists =
+        Teacher._classes.some(
+          c =>
+            String(c.id) ===
+            String(Teacher.state.classId)
+        );
+
+
+      if (!stillExists) {
+
+        Teacher.state.classId =
+          Teacher._classes[0].id;
+
+      }
+
+    } else {
+
       Teacher.state.classId =
-        classes[0].id;
+        null;
 
     }
 
 
+    // --------------------------------------------------------
+    // RENDER DASHBOARD
+    // --------------------------------------------------------
+
     el.innerHTML = `
 
-      <div
-        class="flex flex-col md:flex-row justify-between md:items-center gap-3"
-      >
+      <div class="space-y-6">
 
-        <h2 class="text-xl font-bold">
+        <!-- ==================================================
+             HEADER
+        =================================================== -->
 
-          <i class="fa-solid fa-chalkboard-user text-eduBlue-600"></i>
+        <div
+          class="flex
+                 flex-col
+                 lg:flex-row
+                 lg:items-center
+                 lg:justify-between
+                 gap-4"
+        >
 
-          Teacher Dashboard
+          <div>
 
-        </h2>
+            <div
+              class="flex
+                     items-center
+                     gap-3"
+            >
 
-
-        <div class="flex gap-2 items-center">
-
-          <select
-            id="teacher-class-select"
-            onchange="Teacher.selectClass(this.value)"
-            class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-          >
-
-            ${classes.map(c => `
-
-              <option
-                value="${c.id}"
-                ${c.id === Teacher.state.classId ? 'selected' : ''}
+              <div
+                class="w-11
+                       h-11
+                       rounded-2xl
+                       bg-eduBlue-100
+                       flex
+                       items-center
+                       justify-center
+                       shrink-0"
               >
 
-                ${esc(c.subject)}
-                -
-                ${esc(c.section)}
-                (${esc(c.class_code)})
+                <i
+                  class="fa-solid
+                         fa-chalkboard-user
+                         text-eduBlue-600
+                         text-lg"
+                ></i>
 
-              </option>
+              </div>
 
-            `).join('')}
 
-          </select>
+              <div>
+
+                <h2
+                  class="text-xl
+                         md:text-2xl
+                         font-black
+                         text-slate-800"
+                >
+
+                  Teacher Dashboard
+
+                </h2>
+
+
+                <p
+                  class="text-sm
+                         text-slate-500"
+                >
+
+                  Manage your classes,
+                  learners, grades, and attendance.
+
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
 
 
           <button
             onclick="Teacher.showCreateClass()"
-            class="bg-eduBlue-600 text-white px-3 py-2 rounded-xl text-sm font-bold"
+            class="inline-flex
+                   items-center
+                   justify-center
+                   gap-2
+                   bg-eduBlue-600
+                   hover:bg-eduBlue-700
+                   text-white
+                   px-5
+                   py-2.5
+                   rounded-xl
+                   text-sm
+                   font-bold
+                   shadow-sm
+                   transition"
           >
 
-            <i class="fa-solid fa-plus"></i>
+            <i
+              class="fa-solid fa-plus"
+            ></i>
 
-            New Class
+            Create Class
 
           </button>
 
         </div>
 
-      </div>
 
+        <!-- ==================================================
+             MY CLASSES
+        =================================================== -->
 
-      <div
-        id="teacher-create-class-panel"
-        class="hidden glass-card rounded-2xl p-5"
-      ></div>
+        <div>
 
-
-      <div
-        class="flex gap-2 border-b text-sm font-semibold text-slate-600 overflow-x-auto"
-      >
-
-        ${[
-          'gradebook',
-          'approvals',
-          'attendance',
-          'quizzes',
-          'performance',
-          'exams',
-          'weights'
-        ].map(t => `
-
-          <button
-            class="tab-btn ${Teacher.state.tab === t ? 'active' : ''} px-4 py-2 capitalize"
-            onclick="Teacher.switchTab('${t}')"
+          <div
+            class="flex
+                   items-center
+                   justify-between
+                   mb-4"
           >
 
-            ${t}
+            <div>
 
-          </button>
+              <h3
+                class="text-lg
+                       font-black
+                       text-slate-800"
+              >
 
-        `).join('')}
+                My Classes
+
+              </h3>
+
+
+              <p
+                class="text-xs
+                       text-slate-500
+                       mt-1"
+              >
+
+                ${
+                  Teacher._classes.length
+                }
+                ${
+                  Teacher._classes.length === 1
+                    ? 'class'
+                    : 'classes'
+                }
+                assigned to you.
+
+              </p>
+
+            </div>
+
+          </div>
+
+
+          ${
+            Teacher._classes.length === 0
+
+              ? Teacher.renderEmptyClasses()
+
+              : `
+
+                <div
+                  class="grid
+                         grid-cols-1
+                         md:grid-cols-2
+                         xl:grid-cols-3
+                         gap-5"
+                >
+
+                  ${Teacher._classes
+                    .map(
+                      c =>
+                        Teacher.renderClassCard(c)
+                    )
+                    .join('')}
+
+
+                  <!-- CREATE CLASS CARD -->
+
+                  <button
+                    type="button"
+                    onclick="Teacher.showCreateClass()"
+                    class="min-h-[300px]
+                           rounded-2xl
+                           border-2
+                           border-dashed
+                           border-slate-300
+                           hover:border-eduBlue-400
+                           hover:bg-eduBlue-50/40
+                           transition
+                           flex
+                           flex-col
+                           items-center
+                           justify-center
+                           gap-3
+                           text-slate-500
+                           hover:text-eduBlue-600"
+                  >
+
+                    <span
+                      class="w-14
+                             h-14
+                             rounded-2xl
+                             bg-slate-100
+                             flex
+                             items-center
+                             justify-center"
+                    >
+
+                      <i
+                        class="fa-solid
+                               fa-plus
+                               text-xl"
+                      ></i>
+
+                    </span>
+
+
+                    <span
+                      class="font-bold"
+                    >
+
+                      Create New Class
+
+                    </span>
+
+
+                    <span
+                      class="text-xs
+                             text-slate-400"
+                    >
+
+                      Add another class
+
+                    </span>
+
+                  </button>
+
+                </div>
+
+              `
+          }
+
+        </div>
+
+
+        ${
+          Teacher._classes.length > 0
+
+            ? `
+
+              <!-- ==========================================
+                   SELECTED CLASS
+              =========================================== -->
+
+              <div
+                class="glass-card
+                       rounded-2xl
+                       p-4
+                       md:p-5"
+              >
+
+                <div
+                  class="flex
+                         flex-col
+                         lg:flex-row
+                         lg:items-center
+                         lg:justify-between
+                         gap-4"
+                >
+
+                  <div>
+
+                    <p
+                      class="text-xs
+                             uppercase
+                             tracking-wider
+                             font-bold
+                             text-slate-400
+                             mb-1"
+                    >
+
+                      Selected Class
+
+                    </p>
+
+
+                    <h3
+                      id="teacher-selected-class-name"
+                      class="text-lg
+                             font-black
+                             text-slate-800"
+                    >
+
+                      ${esc(
+                        Teacher.getSelectedClass()?.subject ||
+                        'Select a class'
+                      )}
+
+                    </h3>
+
+
+                    <p
+                      id="teacher-selected-class-meta"
+                      class="text-xs
+                             text-slate-500
+                             mt-1"
+                    >
+
+                      ${Teacher.getSelectedClass()
+                        ? `${esc(Teacher.getSelectedClass().year_level || '')} • ${esc(Teacher.getSelectedClass().section || '')}`
+                        : ''}
+
+                    </p>
+
+                  </div>
+
+
+                  <div
+                    class="flex
+                           flex-wrap
+                           items-center
+                           gap-2"
+                  >
+
+                    <label
+                      for="teacher-class-select"
+                      class="text-xs
+                             font-semibold
+                             text-slate-500"
+                    >
+
+                      Quick Select
+
+                    </label>
+
+
+                    <select
+                      id="teacher-class-select"
+                      onchange="Teacher.selectClass(this.value)"
+                      class="px-3
+                             py-2
+                             rounded-xl
+                             border
+                             border-slate-300
+                             bg-white
+                             text-sm
+                             font-semibold
+                             outline-none
+                             focus:ring-2
+                             focus:ring-eduBlue-300"
+                    >
+
+                      ${Teacher._classes
+                        .map(
+                          c => `
+
+                            <option
+                              value="${esc(c.id)}"
+                              ${
+                                String(c.id) ===
+                                String(Teacher.state.classId)
+                                  ? 'selected'
+                                  : ''
+                              }
+                            >
+
+                              ${esc(c.subject)}
+                              —
+                              ${esc(c.section)}
+
+                            </option>
+
+                          `
+                        )
+                        .join('')}
+
+                    </select>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <!-- ==========================================
+                   TEACHER TABS
+              =========================================== -->
+
+              <div
+                class="glass-card
+                       rounded-2xl
+                       overflow-hidden"
+              >
+
+                <div
+                  class="flex
+                         gap-1
+                         border-b
+                         border-slate-200
+                         px-2
+                         overflow-x-auto"
+                >
+
+                  ${[
+                    'gradebook',
+                    'approvals',
+                    'attendance',
+                    'quizzes',
+                    'performance',
+                    'exams',
+                    'weights'
+                  ]
+                    .map(
+                      t => `
+
+                        <button
+                          class="tab-btn
+                                 whitespace-nowrap
+                                 ${
+                                   Teacher.state.tab === t
+                                     ? 'active'
+                                     : ''
+                                 }
+                                 px-4
+                                 py-3
+                                 text-sm
+                                 font-semibold"
+                          onclick="Teacher.switchTab('${t}')"
+                        >
+
+                          ${
+                            t === 'gradebook'
+                              ? '<i class="fa-solid fa-table-list mr-1"></i> Gradebook'
+                              : t === 'approvals'
+                                ? '<i class="fa-solid fa-user-check mr-1"></i> Approvals'
+                                : t === 'attendance'
+                                  ? '<i class="fa-solid fa-calendar-check mr-1"></i> Attendance'
+                                  : t === 'quizzes'
+                                    ? '<i class="fa-solid fa-circle-question mr-1"></i> Quizzes'
+                                    : t === 'performance'
+                                      ? '<i class="fa-solid fa-chart-line mr-1"></i> Performance'
+                                      : t === 'exams'
+                                        ? '<i class="fa-solid fa-file-pen mr-1"></i> Exams'
+                                        : '<i class="fa-solid fa-sliders mr-1"></i> Weights'
+                          }
+
+                        </button>
+
+                      `
+                    )
+                    .join('')}
+
+                </div>
+
+
+                <div
+                  id="teacher-tab-content"
+                  class="p-4 md:p-5"
+                ></div>
+
+              </div>
+
+            `
+
+            : ''
+
+        }
 
       </div>
-
-
-      <div id="teacher-tab-content"></div>
 
     `;
 
 
-    if (!classes.length) {
+    // --------------------------------------------------------
+    // RENDER SELECTED TAB
+    // --------------------------------------------------------
 
-      document
-        .getElementById(
-          'teacher-tab-content'
-        )
-        .innerHTML = `
+    if (
+      Teacher._classes.length > 0
+    ) {
 
-          <p class="text-sm text-slate-500 italic p-4">
-            Create a class to get started.
-          </p>
-
-        `;
-
-      return;
+      Teacher.switchTab(
+        Teacher.state.tab
+      );
 
     }
-
-
-    Teacher.switchTab(
-      Teacher.state.tab
-    );
 
   },
 
 
-  selectClass(id) {
+  // ==========================================================
+  // EMPTY CLASS STATE
+  // ==========================================================
+
+  renderEmptyClasses() {
+
+    return `
+
+      <div
+        class="glass-card
+               rounded-2xl
+               p-10
+               text-center"
+      >
+
+        <div
+          class="w-16
+                 h-16
+                 mx-auto
+                 rounded-2xl
+                 bg-eduBlue-100
+                 flex
+                 items-center
+                 justify-center
+                 mb-4"
+        >
+
+          <i
+            class="fa-solid
+                   fa-layer-group
+                   text-eduBlue-600
+                   text-2xl"
+          ></i>
+
+        </div>
+
+
+        <h4
+          class="font-black
+                 text-slate-700"
+        >
+
+          No Classes Yet
+
+        </h4>
+
+
+        <p
+          class="text-sm
+                 text-slate-500
+                 max-w-md
+                 mx-auto
+                 mt-2"
+        >
+
+          Create your first class to start managing
+          learners, attendance, assessments, and grades.
+
+        </p>
+
+
+        <button
+          onclick="Teacher.showCreateClass()"
+          class="mt-5
+                 bg-eduBlue-600
+                 hover:bg-eduBlue-700
+                 text-white
+                 px-5
+                 py-2.5
+                 rounded-xl
+                 text-sm
+                 font-bold"
+        >
+
+          <i
+            class="fa-solid fa-plus mr-1"
+          ></i>
+
+          Create Your First Class
+
+        </button>
+
+      </div>
+
+    `;
+
+  },
+
+
+  // ==========================================================
+  // CLASS CARD
+  // ==========================================================
+
+  renderClassCard(c) {
+
+    const studentCount =
+      Number(
+        c.student_count || 0
+      );
+
+
+    const pendingCount =
+      Number(
+        c.pending_count || 0
+      );
+
+
+    const selected =
+      String(c.id) ===
+      String(Teacher.state.classId);
+
+
+    return `
+
+      <div
+        class="relative
+               overflow-hidden
+               rounded-2xl
+               border
+               ${
+                 selected
+                   ? 'border-eduBlue-400 ring-2 ring-eduBlue-100'
+                   : 'border-slate-200'
+               }
+               bg-white
+               shadow-sm
+               hover:shadow-lg
+               transition"
+      >
+
+        <!-- TOP ACCENT -->
+
+        <div
+          class="h-1.5
+                 ${
+                   selected
+                     ? 'bg-eduBlue-600'
+                     : 'bg-slate-200'
+                 }"
+        ></div>
+
+
+        <div
+          class="p-5"
+        >
+
+          <!-- SUBJECT -->
+
+          <div
+            class="flex
+                   items-start
+                   justify-between
+                   gap-3"
+          >
+
+            <div
+              class="flex
+                     gap-3
+                     min-w-0"
+            >
+
+              <div
+                class="w-11
+                       h-11
+                       rounded-xl
+                       bg-eduBlue-100
+                       flex
+                       items-center
+                       justify-center
+                       shrink-0"
+              >
+
+                <i
+                  class="fa-solid
+                         fa-book-open
+                         text-eduBlue-600"
+                ></i>
+
+              </div>
+
+
+              <div
+                class="min-w-0"
+              >
+
+                <h4
+                  class="font-black
+                         text-slate-800
+                         truncate"
+                  title="${esc(c.subject || '')}"
+                >
+
+                  ${esc(
+                    c.subject ||
+                    'Untitled Subject'
+                  )}
+
+                </h4>
+
+
+                <p
+                  class="text-xs
+                         text-slate-500
+                         mt-1"
+                >
+
+                  ${esc(
+                    c.year_level ||
+                    'Year Level'
+                  )}
+
+                  <span
+                    class="mx-1"
+                  >
+                    •
+                  </span>
+
+                  ${esc(
+                    c.section ||
+                    'Section'
+                  )}
+
+                </p>
+
+              </div>
+
+            </div>
+
+
+            ${
+              selected
+
+                ? `
+
+                  <span
+                    class="shrink-0
+                           text-[10px]
+                           font-black
+                           uppercase
+                           px-2
+                           py-1
+                           rounded-full
+                           bg-eduBlue-100
+                           text-eduBlue-700"
+                  >
+
+                    Selected
+
+                  </span>
+
+                `
+
+                : ''
+
+            }
+
+          </div>
+
+
+          <!-- CLASS DETAILS -->
+
+          <div
+            class="mt-5
+                   space-y-2.5"
+          >
+
+            <div
+              class="flex
+                     items-center
+                     justify-between
+                     gap-3
+                     text-sm"
+            >
+
+              <span
+                class="text-slate-500"
+              >
+
+                <i
+                  class="fa-solid
+                         fa-door-open
+                         w-5
+                         text-slate-400"
+                ></i>
+
+                Room
+
+              </span>
+
+
+              <span
+                class="font-semibold
+                       text-slate-700"
+              >
+
+                ${esc(
+                  c.room_number ||
+                  'Not assigned'
+                )}
+
+              </span>
+
+            </div>
+
+
+            <div
+              class="border-t
+                     border-slate-100"
+            ></div>
+
+
+            <div>
+
+              <p
+                class="text-[10px]
+                       uppercase
+                       tracking-wider
+                       font-bold
+                       text-slate-400"
+              >
+
+                Class Code
+
+              </p>
+
+
+              <div
+                class="mt-1
+                       flex
+                       items-center
+                       justify-between
+                       gap-2"
+              >
+
+                <code
+                  class="text-sm
+                         font-black
+                         tracking-wider
+                         text-eduBlue-700
+                         break-all"
+                >
+
+                  ${esc(
+                    c.class_code ||
+                    '—'
+                  )}
+
+                </code>
+
+
+                <button
+                  type="button"
+                  onclick="Teacher.copyClassCode('${esc(c.class_code || '')}')"
+                  class="shrink-0
+                         w-8
+                         h-8
+                         rounded-lg
+                         bg-slate-100
+                         hover:bg-eduBlue-100
+                         text-slate-500
+                         hover:text-eduBlue-600"
+                  title="Copy class code"
+                >
+
+                  <i
+                    class="fa-regular fa-copy"
+                  ></i>
+
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- COUNTS -->
+
+          <div
+            class="grid
+                   grid-cols-2
+                   gap-2
+                   mt-5"
+          >
+
+            <div
+              class="rounded-xl
+                     bg-slate-50
+                     p-3"
+            >
+
+              <div
+                class="flex
+                       items-center
+                       gap-2"
+              >
+
+                <i
+                  class="fa-solid
+                         fa-users
+                         text-eduBlue-600"
+                ></i>
+
+
+                <span
+                  class="text-xs
+                         text-slate-500"
+                >
+
+                  Students
+
+                </span>
+
+              </div>
+
+
+              <p
+                class="text-lg
+                       font-black
+                       text-slate-800
+                       mt-1"
+              >
+
+                ${studentCount}
+
+              </p>
+
+            </div>
+
+
+            <div
+              class="rounded-xl
+                     ${
+                       pendingCount > 0
+                         ? 'bg-amber-50'
+                         : 'bg-slate-50'
+                     }
+                     p-3"
+            >
+
+              <div
+                class="flex
+                       items-center
+                       gap-2"
+              >
+
+                <i
+                  class="fa-solid
+                         fa-user-clock
+                         ${
+                           pendingCount > 0
+                             ? 'text-amber-500'
+                             : 'text-slate-400'
+                         }"
+                ></i>
+
+
+                <span
+                  class="text-xs
+                         ${
+                           pendingCount > 0
+                             ? 'text-amber-700'
+                             : 'text-slate-500'
+                         }"
+                >
+
+                  Pending
+
+                </span>
+
+              </div>
+
+
+              <p
+                class="text-lg
+                       font-black
+                       ${
+                         pendingCount > 0
+                           ? 'text-amber-700'
+                           : 'text-slate-800'
+                       }
+                       mt-1"
+              >
+
+                ${pendingCount}
+
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <!-- ACTIONS -->
+
+          <div
+            class="grid
+                   grid-cols-2
+                   gap-2
+                   mt-5"
+          >
+
+            <button
+              type="button"
+              onclick="Teacher.selectClass('${esc(c.id)}')"
+              class="inline-flex
+                     items-center
+                     justify-center
+                     gap-2
+                     bg-eduBlue-600
+                     hover:bg-eduBlue-700
+                     text-white
+                     px-3
+                     py-2.5
+                     rounded-xl
+                     text-xs
+                     font-bold
+                     transition"
+            >
+
+              <i
+                class="fa-solid fa-folder-open"
+              ></i>
+
+              Open Class
+
+            </button>
+
+
+            <button
+              type="button"
+              onclick="Teacher.editClass('${esc(c.id)}')"
+              class="inline-flex
+                     items-center
+                     justify-center
+                     gap-2
+                     bg-slate-100
+                     hover:bg-slate-200
+                     text-slate-700
+                     px-3
+                     py-2.5
+                     rounded-xl
+                     text-xs
+                     font-bold
+                     transition"
+            >
+
+              <i
+                class="fa-solid fa-pen-to-square"
+              ></i>
+
+              Edit Class
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    `;
+
+  },
+
+
+  // ==========================================================
+  // GET SELECTED CLASS
+  // ==========================================================
+
+  getSelectedClass() {
+
+    return Teacher._classes.find(
+      c =>
+        String(c.id) ===
+        String(Teacher.state.classId)
+    ) || null;
+
+  },
+
+
+  // ==========================================================
+  // SELECT CLASS
+  // ==========================================================
+
+  async selectClass(id) {
+
+    const exists =
+      Teacher._classes.some(
+        c =>
+          String(c.id) ===
+          String(id)
+      );
+
+
+    if (!exists) return;
+
 
     Teacher.state.classId =
       id;
 
-    Teacher.switchTab(
-      Teacher.state.tab
-    );
 
-    ApprovalManager.forceRefresh();
+    // Keep current tab.
+
+    await Teacher.render();
 
   },
 
 
-  showCreateClass() {
+  // ==========================================================
+  // COPY CLASS CODE
+  // ==========================================================
 
-    const panel =
-      document.getElementById(
-        'teacher-create-class-panel'
+  async copyClassCode(code) {
+
+    if (!code) return;
+
+
+    try {
+
+      await navigator.clipboard.writeText(
+        code
       );
 
 
-    if (!panel) return;
+      Toast.show(
+        'Copied',
+        'Class code copied to clipboard.',
+        'success'
+      );
 
+    } catch {
 
-    panel.classList.remove(
-      'hidden'
-    );
+      Toast.show(
+        'Copy Failed',
+        'Unable to copy the class code.',
+        'error'
+      );
 
-
-    panel.innerHTML = `
-
-      <h4 class="font-bold mb-3">
-        Create Class
-      </h4>
-
-
-      <form
-        onsubmit="return Teacher.createClass(event)"
-        class="grid grid-cols-2 md:grid-cols-4 gap-2"
-      >
-
-        <input
-          required
-          id="cc-subject"
-          placeholder="Subject *"
-          class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-        >
-
-        <input
-          required
-          id="cc-section"
-          placeholder="Section *"
-          class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-        >
-
-        <input
-          required
-          id="cc-yearLevel"
-          placeholder="Year Level *"
-          class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-        >
-
-        <input
-          id="cc-roomNumber"
-          placeholder="Room Number"
-          class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-        >
-
-        <button
-          class="col-span-2 md:col-span-4 bg-eduBlue-600 text-white py-2 rounded-xl text-sm font-bold"
-        >
-          Create
-        </button>
-
-      </form>
-
-    `;
+    }
 
   },
 
+
+  // ==========================================================
+  // CREATE CLASS PANEL / MODAL
+  // ==========================================================
+
+  showCreateClass() {
+
+    const existing =
+      document.getElementById(
+        'teacher-class-modal'
+      );
+
+
+    if (existing) {
+      existing.remove();
+    }
+
+
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `
+
+        <div
+          id="teacher-class-modal"
+          class="fixed
+                 inset-0
+                 z-[100]
+                 flex
+                 items-center
+                 justify-center
+                 p-4"
+        >
+
+          <div
+            class="absolute
+                   inset-0
+                   bg-slate-900/60
+                   backdrop-blur-sm"
+            onclick="Teacher.closeClassModal()"
+          ></div>
+
+
+          <div
+            class="relative
+                   w-full
+                   max-w-lg
+                   bg-white
+                   rounded-2xl
+                   shadow-2xl
+                   overflow-hidden"
+          >
+
+            <!-- HEADER -->
+
+            <div
+              class="px-5
+                     py-4
+                     bg-eduBlue-600
+                     text-white"
+            >
+
+              <div
+                class="flex
+                       items-center
+                       justify-between
+                       gap-3"
+              >
+
+                <div>
+
+                  <h3
+                    class="font-black
+                           text-lg"
+                  >
+
+                    Create New Class
+
+                  </h3>
+
+
+                  <p
+                    class="text-xs
+                           text-white/80
+                           mt-1"
+                  >
+
+                    Add a class to your teacher dashboard.
+
+                  </p>
+
+                </div>
+
+
+                <button
+                  type="button"
+                  onclick="Teacher.closeClassModal()"
+                  class="w-9
+                         h-9
+                         rounded-xl
+                         bg-white/10
+                         hover:bg-white/20
+                         flex
+                         items-center
+                         justify-center"
+                >
+
+                  <i
+                    class="fa-solid fa-xmark"
+                  ></i>
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <!-- FORM -->
+
+            <form
+              onsubmit="return Teacher.createClass(event)"
+              class="p-5
+                     space-y-4"
+            >
+
+              <div>
+
+                <label
+                  class="block
+                         text-sm
+                         font-bold
+                         text-slate-700
+                         mb-1"
+                >
+
+                  Subject
+
+                </label>
+
+
+                <input
+                  id="cc-subject"
+                  type="text"
+                  required
+                  placeholder="e.g. General Mathematics"
+                  class="w-full
+                         px-3
+                         py-2.5
+                         rounded-xl
+                         border
+                         border-slate-300
+                         outline-none
+                         focus:ring-2
+                         focus:ring-eduBlue-300"
+                >
+
+              </div>
+
+
+              <div
+                class="grid
+                       grid-cols-1
+                       sm:grid-cols-2
+                       gap-4"
+              >
+
+                <div>
+
+                  <label
+                    class="block
+                           text-sm
+                           font-bold
+                           text-slate-700
+                           mb-1"
+                  >
+
+                    Section
+
+                  </label>
+
+
+                  <input
+                    id="cc-section"
+                    type="text"
+                    required
+                    placeholder="e.g. STEM-A"
+                    class="w-full
+                           px-3
+                           py-2.5
+                           rounded-xl
+                           border
+                           border-slate-300
+                           outline-none
+                           focus:ring-2
+                           focus:ring-eduBlue-300"
+                  >
+
+                </div>
+
+
+                <div>
+
+                  <label
+                    class="block
+                           text-sm
+                           font-bold
+                           text-slate-700
+                           mb-1"
+                  >
+
+                    Year Level
+
+                  </label>
+
+
+                  <input
+                    id="cc-yearLevel"
+                    type="text"
+                    required
+                    placeholder="e.g. Grade 12"
+                    class="w-full
+                           px-3
+                           py-2.5
+                           rounded-xl
+                           border
+                           border-slate-300
+                           outline-none
+                           focus:ring-2
+                           focus:ring-eduBlue-300"
+                  >
+
+                </div>
+
+              </div>
+
+
+              <div>
+
+                <label
+                  class="block
+                         text-sm
+                         font-bold
+                         text-slate-700
+                         mb-1"
+                >
+
+                  Room Number
+                  <span
+                    class="font-normal
+                           text-slate-400"
+                  >
+                    (optional)
+                  </span>
+
+                </label>
+
+
+                <input
+                  id="cc-roomNumber"
+                  type="text"
+                  placeholder="e.g. Room 204"
+                  class="w-full
+                         px-3
+                         py-2.5
+                         rounded-xl
+                         border
+                         border-slate-300
+                         outline-none
+                         focus:ring-2
+                         focus:ring-eduBlue-300"
+                >
+
+              </div>
+
+
+              <div
+                class="rounded-xl
+                       bg-blue-50
+                       border
+                       border-blue-100
+                       p-3"
+              >
+
+                <div
+                  class="flex
+                         gap-2"
+                >
+
+                  <i
+                    class="fa-solid
+                           fa-circle-info
+                           text-eduBlue-600
+                           mt-0.5"
+                  ></i>
+
+
+                  <p
+                    class="text-xs
+                           text-slate-600"
+                  >
+
+                    A unique class code will be generated
+                    automatically after the class is created.
+
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div
+                class="flex
+                       flex-col-reverse
+                       sm:flex-row
+                       sm:justify-end
+                       gap-2
+                       pt-2"
+              >
+
+                <button
+                  type="button"
+                  onclick="Teacher.closeClassModal()"
+                  class="px-4
+                         py-2.5
+                         rounded-xl
+                         bg-slate-100
+                         hover:bg-slate-200
+                         text-slate-700
+                         text-sm
+                         font-bold"
+                >
+
+                  Cancel
+
+                </button>
+
+
+                <button
+                  type="submit"
+                  class="px-5
+                         py-2.5
+                         rounded-xl
+                         bg-eduBlue-600
+                         hover:bg-eduBlue-700
+                         text-white
+                         text-sm
+                         font-bold"
+                >
+
+                  <i
+                    class="fa-solid fa-plus mr-1"
+                  ></i>
+
+                  Create Class
+
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+
+      `
+    );
+
+  },
+
+
+  // ==========================================================
+  // CLOSE CLASS MODAL
+  // ==========================================================
+
+  closeClassModal() {
+
+    const modal =
+      document.getElementById(
+        'teacher-class-modal'
+      );
+
+
+    if (modal) {
+      modal.remove();
+    }
+
+  },
+
+
+  // ==========================================================
+  // CREATE CLASS
+  // ==========================================================
 
   async createClass(e) {
 
     e.preventDefault();
 
 
+    const subject =
+      val('cc-subject').trim();
+
+    const section =
+      val('cc-section').trim();
+
+    const yearLevel =
+      val('cc-yearLevel').trim();
+
+    const roomNumber =
+      val('cc-roomNumber').trim();
+
+
+    if (
+      !subject ||
+      !section ||
+      !yearLevel
+    ) {
+
+      Toast.show(
+        'Missing Information',
+        'Subject, section, and year level are required.',
+        'error'
+      );
+
+      return false;
+
+    }
+
+
     try {
 
-      await api(
-        'POST',
-        '/classes',
-        {
-          subject:
-            val('cc-subject'),
-
-          section:
-            val('cc-section'),
-
-          yearLevel:
-            val('cc-yearLevel'),
-
-          roomNumber:
-            val('cc-roomNumber')
-        }
-      );
+      const created =
+        await api(
+          'POST',
+          '/classes',
+          {
+            subject,
+            section,
+            yearLevel,
+            roomNumber
+          }
+        );
 
 
       Toast.show(
-        'Created',
-        'Class created.',
+        'Class Created',
+        'Your class has been created successfully.',
         'success'
       );
 
 
-      Teacher.render();
+      Teacher.closeClassModal();
+
+
+      if (created?.id) {
+
+        Teacher.state.classId =
+          created.id;
+
+      }
+
+
+      await Teacher.render();
+
+
+      ApprovalManager.forceRefresh();
+
 
     } catch {}
 
@@ -2107,6 +3509,561 @@ const Teacher = {
 
   },
 
+
+  // ==========================================================
+  // EDIT CLASS
+  // ==========================================================
+
+  editClass(classId) {
+
+    const cls =
+      Teacher._classes.find(
+        c =>
+          String(c.id) ===
+          String(classId)
+      );
+
+
+    if (!cls) {
+
+      Toast.show(
+        'Class Not Found',
+        'The selected class could not be found.',
+        'error'
+      );
+
+      return;
+
+    }
+
+
+    const existing =
+      document.getElementById(
+        'teacher-class-modal'
+      );
+
+
+    if (existing) {
+      existing.remove();
+    }
+
+
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `
+
+        <div
+          id="teacher-class-modal"
+          class="fixed
+                 inset-0
+                 z-[100]
+                 flex
+                 items-center
+                 justify-center
+                 p-4"
+        >
+
+          <div
+            class="absolute
+                   inset-0
+                   bg-slate-900/60
+                   backdrop-blur-sm"
+            onclick="Teacher.closeClassModal()"
+          ></div>
+
+
+          <div
+            class="relative
+                   w-full
+                   max-w-lg
+                   bg-white
+                   rounded-2xl
+                   shadow-2xl
+                   overflow-hidden"
+          >
+
+            <!-- HEADER -->
+
+            <div
+              class="px-5
+                     py-4
+                     bg-slate-800
+                     text-white"
+            >
+
+              <div
+                class="flex
+                       items-center
+                       justify-between
+                       gap-3"
+              >
+
+                <div>
+
+                  <h3
+                    class="font-black
+                           text-lg"
+                  >
+
+                    Edit Class
+
+                  </h3>
+
+
+                  <p
+                    class="text-xs
+                           text-white/70
+                           mt-1"
+                  >
+
+                    Update the basic class information.
+
+                  </p>
+
+                </div>
+
+
+                <button
+                  type="button"
+                  onclick="Teacher.closeClassModal()"
+                  class="w-9
+                         h-9
+                         rounded-xl
+                         bg-white/10
+                         hover:bg-white/20
+                         flex
+                         items-center
+                         justify-center"
+                >
+
+                  <i
+                    class="fa-solid fa-xmark"
+                  ></i>
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <!-- FORM -->
+
+            <form
+              onsubmit="return Teacher.saveClass(event, '${esc(cls.id)}')"
+              class="p-5
+                     space-y-4"
+            >
+
+              <div>
+
+                <label
+                  class="block
+                         text-sm
+                         font-bold
+                         text-slate-700
+                         mb-1"
+                >
+
+                  Subject
+
+                </label>
+
+
+                <input
+                  id="edit-class-subject"
+                  type="text"
+                  required
+                  value="${esc(cls.subject || '')}"
+                  class="w-full
+                         px-3
+                         py-2.5
+                         rounded-xl
+                         border
+                         border-slate-300
+                         outline-none
+                         focus:ring-2
+                         focus:ring-eduBlue-300"
+                >
+
+              </div>
+
+
+              <div
+                class="grid
+                       grid-cols-1
+                       sm:grid-cols-2
+                       gap-4"
+              >
+
+                <div>
+
+                  <label
+                    class="block
+                           text-sm
+                           font-bold
+                           text-slate-700
+                           mb-1"
+                  >
+
+                    Section
+
+                  </label>
+
+
+                  <input
+                    id="edit-class-section"
+                    type="text"
+                    required
+                    value="${esc(cls.section || '')}"
+                    class="w-full
+                           px-3
+                           py-2.5
+                           rounded-xl
+                           border
+                           border-slate-300
+                           outline-none
+                           focus:ring-2
+                           focus:ring-eduBlue-300"
+                  >
+
+                </div>
+
+
+                <div>
+
+                  <label
+                    class="block
+                           text-sm
+                           font-bold
+                           text-slate-700
+                           mb-1"
+                  >
+
+                    Year Level
+
+                  </label>
+
+
+                  <input
+                    id="edit-class-yearLevel"
+                    type="text"
+                    required
+                    value="${esc(cls.year_level || '')}"
+                    class="w-full
+                           px-3
+                           py-2.5
+                           rounded-xl
+                           border
+                           border-slate-300
+                           outline-none
+                           focus:ring-2
+                           focus:ring-eduBlue-300"
+                  >
+
+                </div>
+
+              </div>
+
+
+              <div>
+
+                <label
+                  class="block
+                         text-sm
+                         font-bold
+                         text-slate-700
+                         mb-1"
+                >
+
+                  Room Number
+
+                </label>
+
+
+                <input
+                  id="edit-class-roomNumber"
+                  type="text"
+                  value="${esc(cls.room_number || '')}"
+                  placeholder="e.g. Room 204"
+                  class="w-full
+                         px-3
+                         py-2.5
+                         rounded-xl
+                         border
+                         border-slate-300
+                         outline-none
+                         focus:ring-2
+                         focus:ring-eduBlue-300"
+                >
+
+              </div>
+
+
+              <!-- LOCKED INFORMATION -->
+
+              <div
+                class="rounded-xl
+                       bg-slate-50
+                       border
+                       border-slate-200
+                       p-3
+                       space-y-2"
+              >
+
+                <p
+                  class="text-[10px]
+                         uppercase
+                         tracking-wider
+                         font-black
+                         text-slate-400"
+                >
+
+                  Protected Class Information
+
+                </p>
+
+
+                <div
+                  class="flex
+                         items-center
+                         justify-between
+                         gap-3
+                         text-xs"
+                >
+
+                  <span
+                    class="text-slate-500"
+                  >
+
+                    Class Code
+
+                  </span>
+
+
+                  <code
+                    class="font-bold
+                           text-slate-700"
+                  >
+
+                    ${esc(
+                      cls.class_code ||
+                      '—'
+                    )}
+
+                  </code>
+
+                </div>
+
+
+                <div
+                  class="flex
+                         items-center
+                         justify-between
+                         gap-3
+                         text-xs"
+                >
+
+                  <span
+                    class="text-slate-500"
+                  >
+
+                    Academic Term
+
+                  </span>
+
+
+                  <span
+                    class="font-semibold
+                           text-slate-700"
+                  >
+
+                    ${
+                      cls.academic_year
+                        ? `${esc(cls.academic_year)} • ${esc(cls.semester || '')}`
+                        : 'Current Term'
+                    }
+
+                  </span>
+
+                </div>
+
+
+                <p
+                  class="text-[10px]
+                         text-slate-400
+                         pt-1"
+                >
+
+                  Class code, teacher assignment,
+                  academic term, and grading weights
+                  cannot be changed here.
+
+                </p>
+
+              </div>
+
+
+              <!-- ACTIONS -->
+
+              <div
+                class="flex
+                       flex-col-reverse
+                       sm:flex-row
+                       sm:justify-end
+                       gap-2
+                       pt-2"
+              >
+
+                <button
+                  type="button"
+                  onclick="Teacher.closeClassModal()"
+                  class="px-4
+                         py-2.5
+                         rounded-xl
+                         bg-slate-100
+                         hover:bg-slate-200
+                         text-slate-700
+                         text-sm
+                         font-bold"
+                >
+
+                  Cancel
+
+                </button>
+
+
+                <button
+                  type="submit"
+                  class="px-5
+                         py-2.5
+                         rounded-xl
+                         bg-eduBlue-600
+                         hover:bg-eduBlue-700
+                         text-white
+                         text-sm
+                         font-bold"
+                >
+
+                  <i
+                    class="fa-solid
+                           fa-floppy-disk
+                           mr-1"
+                  ></i>
+
+                  Save Changes
+
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+
+      `
+    );
+
+  },
+
+
+  // ==========================================================
+  // SAVE CLASS EDIT
+  // ==========================================================
+
+  async saveClass(
+    e,
+    classId
+  ) {
+
+    e.preventDefault();
+
+
+    const subject =
+      val(
+        'edit-class-subject'
+      ).trim();
+
+    const section =
+      val(
+        'edit-class-section'
+      ).trim();
+
+    const yearLevel =
+      val(
+        'edit-class-yearLevel'
+      ).trim();
+
+    const roomNumber =
+      val(
+        'edit-class-roomNumber'
+      ).trim();
+
+
+    if (
+      !subject ||
+      !section ||
+      !yearLevel
+    ) {
+
+      Toast.show(
+        'Missing Information',
+        'Subject, section, and year level are required.',
+        'error'
+      );
+
+      return false;
+
+    }
+
+
+    try {
+
+      const response =
+        await api(
+          'PUT',
+          `/classes/${classId}`,
+          {
+            subject,
+            section,
+            yearLevel,
+            roomNumber
+          }
+        );
+
+
+      Toast.show(
+        'Class Updated',
+        'Class information has been updated successfully.',
+        'success'
+      );
+
+
+      Teacher.closeClassModal();
+
+
+      // Keep edited class selected.
+
+      Teacher.state.classId =
+        classId;
+
+
+      await Teacher.render();
+
+
+    } catch {}
+
+
+    return false;
+
+  },
+
+
+  // ==========================================================
+  // SWITCH TEACHER TAB
+  // ==========================================================
 
   switchTab(tab) {
 
@@ -2118,19 +4075,28 @@ const Teacher = {
       .querySelectorAll(
         '#teacher-section .tab-btn'
       )
-      .forEach(b => {
+      .forEach(
+        b => {
 
-        b.classList.toggle(
-          'active',
-          b.textContent
-            .trim()
-            .toLowerCase() === tab
-        );
+          b.classList.toggle(
+            'active',
+            b.dataset?.tab === tab ||
+            b.textContent
+              .trim()
+              .toLowerCase()
+              .includes(
+                tab.replace(
+                  '-',
+                  ' '
+                )
+              )
+          );
 
-      });
+        }
+      );
 
 
-    const fn = {
+    const functions = {
 
       gradebook:
         Teacher.renderGradebook,
@@ -2143,36 +4109,44 @@ const Teacher = {
 
       quizzes:
         () =>
-          Teacher.renderAssessmentTab(
+          Teacher.renderAssessment(
             'quizzes'
           ),
 
       performance:
         () =>
-          Teacher.renderAssessmentTab(
+          Teacher.renderAssessment(
             'performance'
           ),
 
       exams:
         () =>
-          Teacher.renderAssessmentTab(
+          Teacher.renderAssessment(
             'exams'
           ),
 
       weights:
         Teacher.renderWeights
 
-    }[tab];
+    };
 
 
-    if (typeof fn === 'function') {
+    const fn =
+      functions[tab];
+
+
+    if (
+      typeof fn === 'function'
+    ) {
 
       fn();
 
     }
 
 
-    if (tab === 'approvals') {
+    if (
+      tab === 'approvals'
+    ) {
 
       ApprovalManager.forceRefresh();
 
@@ -2196,296 +4170,290 @@ const Teacher = {
     if (!box) return;
 
 
-    box.innerHTML =
-      `<div class="text-slate-400 text-sm py-6">
-        Loading gradebook…
-      </div>`;
-
-
     const cid =
       Teacher.state.classId;
+
+
+    if (!cid) {
+
+      box.innerHTML = '';
+
+      return;
+
+    }
 
 
     const rows =
       await api(
         'GET',
-        `/grades/${cid}/gradebook`
+        `/grades/${cid}`
       ).catch(() => []);
 
 
     box.innerHTML = `
 
       <div
-        class="glass-card rounded-2xl p-4 overflow-x-auto"
+        class="space-y-4"
       >
 
         <div
-          class="flex justify-between items-center mb-2"
+          class="flex
+                 flex-col
+                 sm:flex-row
+                 sm:items-center
+                 sm:justify-between
+                 gap-3"
         >
 
+          <div>
+
+            <h4
+              class="font-black
+                     text-slate-800"
+            >
+
+              Gradebook
+
+            </h4>
+
+
+            <p
+              class="text-xs
+                     text-slate-500"
+                     mt-1"
+            >
+
+              Manage learner grades for the selected class.
+
+            </p>
+
+          </div>
+
+
           <input
-            id="gb-search"
-            oninput="Teacher.filterGradebook()"
+            id="teacher-grade-filter"
+            type="search"
             placeholder="Search student..."
-            class="px-3 py-2 rounded-xl border border-slate-300 text-sm w-64"
+            oninput="Teacher.filterGradebook()"
+            class="w-full
+                   sm:w-64
+                   px-3
+                   py-2
+                   rounded-xl
+                   border
+                   border-slate-300
+                   text-sm"
           >
-
-
-          <a
-            href="${API_BASE}/reports/${cid}/grade-sheet.csv"
-            target="_blank"
-            class="text-sm font-bold text-eduBlue-600"
-          >
-
-            <i class="fa-solid fa-file-csv"></i>
-            Export CSV
-
-          </a>
 
         </div>
 
 
-        <table class="gradebook w-full text-left">
+        <div
+          class="glass-card
+                 rounded-2xl
+                 overflow-x-auto"
+        >
 
-          <thead
-            class="text-xs uppercase text-slate-500 border-b"
+          <table
+            id="teacher-grade-table"
+            class="gradebook
+                   w-full
+                   text-left"
           >
 
-            <tr>
+            <thead
+              class="text-xs
+                     uppercase
+                     text-slate-500
+                     border-b"
+            >
 
-              <th>Student ID</th>
-              <th>Name</th>
-              <th>Att.</th>
-              <th>Quiz</th>
-              <th>Perf.</th>
-              <th>Exam</th>
-              <th>Final</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <tr>
 
-            </tr>
+                <th>Student</th>
+                <th>Attendance</th>
+                <th>Quiz</th>
+                <th>Performance</th>
+                <th>Exam</th>
+                <th>Final</th>
+                <th>Status</th>
 
-          </thead>
+              </tr>
+
+            </thead>
 
 
-          <tbody id="gb-body">
+            <tbody>
 
-            ${Teacher.gradebookRows(rows)}
+              ${
+                Array.isArray(rows)
+                  ? rows
+                      .map(
+                        r =>
+                          Teacher.gradebookRow(r)
+                      )
+                      .join('')
+                  : ''
+              }
 
-          </tbody>
+            </tbody>
 
-        </table>
+          </table>
+
+        </div>
 
       </div>
 
     `;
 
-
-    Teacher._gbRows =
-      rows;
-
   },
 
 
-  gradebookRows(rows) {
+  gradebookRow(r) {
 
-    if (!rows.length) {
-
-      return `
-
-        <tr>
-
-          <td
-            colspan="9"
-            class="text-center text-slate-400 py-6"
-          >
-            No students enrolled yet.
-          </td>
-
-        </tr>
-
-      `;
-
-    }
-
-
-    return rows.map(r => `
+    return `
 
       <tr
-        class="border-b hover:bg-slate-50"
+        class="border-b
+               hover:bg-slate-50"
       >
 
-        <td>
-          ${esc(r.studentNumber)}
+        <td
+          class="font-semibold"
+        >
+
+          ${esc(
+            r.last_name ||
+            r.s_last ||
+            ''
+          )}
+
+          ,
+
+          ${esc(
+            r.first_name ||
+            r.s_first ||
+            ''
+          )}
+
         </td>
 
-        <td>
-          ${esc(r.studentName)}
-        </td>
-
-        <td>
-          ${pct(r.attendance)}
-        </td>
-
-        <td>
-          ${pct(r.quiz)}
-        </td>
-
-        <td>
-          ${pct(r.performance)}
-        </td>
-
-        <td>
-          ${pct(r.exam)}
-        </td>
-
-        <td class="font-bold">
-          ${r.finalGrade ?? '—'}
-        </td>
 
         <td>
-
-          <span
-            class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-slate-100"
-          >
-            ${esc(r.status)}
-          </span>
-
+          ${esc(
+            r.attendance ?? '—'
+          )}
         </td>
 
-        <td class="whitespace-nowrap">
 
-          <button
-            onclick="Teacher.finalize('${r.studentId}')"
-            class="text-xs text-eduBlue-600 font-bold mr-2"
-            title="Finalize"
-          >
-
-            <i class="fa-solid fa-lock"></i>
-
-          </button>
+        <td>
+          ${esc(
+            r.quiz ?? '—'
+          )}
+        </td>
 
 
-          <button
-            onclick="Teacher.release('${r.studentId}')"
-            class="text-xs text-emerald-600 font-bold"
-            title="Release to student"
-          >
+        <td>
+          ${esc(
+            r.performance ?? '—'
+          )}
+        </td>
 
-            <i class="fa-solid fa-paper-plane"></i>
 
-          </button>
+        <td>
+          ${esc(
+            r.exam ?? '—'
+          )}
+        </td>
+
+
+        <td
+          class="font-black"
+        >
+          ${esc(
+            r.final_grade ??
+            r.finalGrade ??
+            '—'
+          )}
+        </td>
+
+
+        <td>
+
+          ${
+            r.status
+              ? `
+                <span
+                  class="text-xs
+                         font-bold
+                         ${
+                           r.status === 'released'
+                             ? 'text-emerald-600'
+                             : 'text-amber-600'
+                         }"
+                >
+
+                  ${esc(r.status)}
+
+                </span>
+              `
+              : '—'
+          }
 
         </td>
 
       </tr>
 
-    `).join('');
+    `;
 
   },
 
 
   filterGradebook() {
 
-    const search =
+    const input =
       document.getElementById(
-        'gb-search'
+        'teacher-grade-filter'
       );
 
 
-    const body =
+    const table =
       document.getElementById(
-        'gb-body'
+        'teacher-grade-table'
       );
 
 
-    if (!search || !body) return;
+    if (!input || !table) return;
 
 
-    const q =
-      search.value
+    const query =
+      input.value
+        .trim()
         .toLowerCase();
 
 
-    const rows =
-      (Teacher._gbRows || [])
-        .filter(r =>
+    table
+      .querySelectorAll(
+        'tbody tr'
+      )
+      .forEach(
+        row => {
 
-          String(
-            r.studentName || ''
-          )
-            .toLowerCase()
-            .includes(q)
+          row.style.display =
+            row.textContent
+              .toLowerCase()
+              .includes(query)
+                ? ''
+                : 'none';
 
-          ||
-
-          String(
-            r.studentNumber || ''
-          )
-            .toLowerCase()
-            .includes(q)
-
-        );
-
-
-    body.innerHTML =
-      Teacher.gradebookRows(
-        rows
+        }
       );
-
-  },
-
-
-  async finalize(studentId) {
-
-    try {
-
-      await api(
-        'POST',
-        `/grades/${Teacher.state.classId}/students/${studentId}/finalize`
-      );
-
-
-      Toast.show(
-        'Finalized',
-        'Grade finalized.',
-        'success'
-      );
-
-
-      Teacher.renderGradebook();
-
-    } catch {}
-
-  },
-
-
-  async release(studentId) {
-
-    try {
-
-      await api(
-        'POST',
-        `/grades/${Teacher.state.classId}/students/${studentId}/release`
-      );
-
-
-      Toast.show(
-        'Released',
-        'Grade released to student.',
-        'success'
-      );
-
-
-      Teacher.renderGradebook();
-
-    } catch {}
 
   },
 
 
   // ==========================================================
-  // STUDENT JOIN APPROVALS
+  // APPROVALS
   // ==========================================================
 
   async renderApprovals() {
@@ -2503,6 +4471,9 @@ const Teacher = {
       Teacher.state.classId;
 
 
+    if (!cid) return;
+
+
     const rows =
       await api(
         'GET',
@@ -2513,34 +4484,54 @@ const Teacher = {
     box.innerHTML = `
 
       <div
-        class="glass-card rounded-2xl p-4"
+        class="glass-card
+               rounded-2xl
+               p-4"
       >
 
         <div
-          class="flex flex-col sm:flex-row
-                 sm:items-center
-                 sm:justify-between
-                 gap-2
-                 mb-3"
+          class="flex
+                 items-center
+                 justify-between
+                 gap-3
+                 mb-4"
         >
 
-          <h4 class="font-bold">
+          <div>
 
-            <i
-              class="fa-solid fa-user-clock text-amber-500"
-            ></i>
+            <h4
+              class="font-black"
+            >
 
-            Pending Join Requests
+              Student Approvals
 
-          </h4>
+            </h4>
+
+
+            <p
+              class="text-xs
+                     text-slate-500
+                     mt-1"
+            >
+
+              Review students requesting to join this class.
+
+            </p>
+
+          </div>
 
 
           <span
-            class="text-xs font-bold
-                   px-3 py-1
+            class="px-3
+                   py-1
                    rounded-full
-                   bg-amber-100
-                   text-amber-700"
+                   text-xs
+                   font-bold
+                   ${
+                     rows.length
+                       ? 'bg-amber-100 text-amber-700'
+                       : 'bg-emerald-100 text-emerald-700'
+                   }"
           >
 
             ${rows.length}
@@ -2556,115 +4547,134 @@ const Teacher = {
 
             ? `
 
-              <div class="text-center py-8">
+              <div
+                class="text-center
+                       py-10"
+              >
 
                 <i
-                  class="fa-solid fa-circle-check
+                  class="fa-solid
+                         fa-circle-check
                          text-emerald-500
-                         text-3xl mb-2"
+                         text-3xl
+                         mb-3"
                 ></i>
 
-                <p class="text-sm text-slate-500">
-                  No pending requests.
-                </p>
 
-                <p class="text-xs text-slate-400 mt-1">
-                  Students who join with your class code
-                  will appear here for verification.
+                <p
+                  class="font-semibold
+                         text-slate-600"
+                >
+
+                  No pending requests
+
                 </p>
 
               </div>
 
             `
 
-            : rows.map(s => `
+            : rows
+                .map(
+                  r => `
 
-              <div
-                class="flex flex-col sm:flex-row
-                       sm:justify-between
-                       sm:items-center
-                       gap-3
-                       border-b py-3 text-sm"
-              >
+                    <div
+                      class="flex
+                             flex-col
+                             sm:flex-row
+                             sm:items-center
+                             sm:justify-between
+                             gap-3
+                             border-b
+                             py-3"
+                    >
 
-                <div>
+                      <div>
 
-                  <b>
-                    ${esc(s.last_name)},
-                    ${esc(s.first_name)}
-                  </b>
+                        <b>
 
-                  <span
-                    class="text-slate-400 text-xs"
-                  >
-                    (${esc(s.student_number)}
-                    ·
-                    ${esc(s.year_level)})
-                  </span>
+                          ${esc(
+                            r.first_name || ''
+                          )}
 
-                </div>
+                          ${esc(
+                            r.last_name || ''
+                          )}
 
-
-                <div
-                  class="flex gap-2"
-                >
-
-                  <button
-                    onclick="Teacher.approveEnrollment('${s.id}')"
-                    class="bg-emerald-600
-                           hover:bg-emerald-700
-                           text-white
-                           px-3 py-1.5
-                           rounded-lg
-                           text-xs
-                           font-bold
-                           transition"
-                  >
-
-                    <i class="fa-solid fa-check"></i>
-                    Approve
-
-                  </button>
+                        </b>
 
 
-                  <button
-                    onclick="Teacher.rejectEnrollment('${s.id}')"
-                    class="bg-red-600
-                           hover:bg-red-700
-                           text-white
-                           px-3 py-1.5
-                           rounded-lg
-                           text-xs
-                           font-bold
-                           transition"
-                  >
+                        <p
+                          class="text-xs
+                                 text-slate-500"
+                        >
 
-                    <i class="fa-solid fa-xmark"></i>
-                    Reject
+                          ${esc(
+                            r.email || ''
+                          )}
 
-                  </button>
+                        </p>
 
-                </div>
+                      </div>
 
-              </div>
 
-            `).join('')
+                      <div
+                        class="flex
+                               gap-2"
+                      >
+
+                        <button
+                          onclick="Teacher.approveStudent('${esc(r.id)}')"
+                          class="bg-emerald-600
+                                 hover:bg-emerald-700
+                                 text-white
+                                 px-3
+                                 py-1.5
+                                 rounded-lg
+                                 text-xs
+                                 font-bold"
+                        >
+
+                          Approve
+
+                        </button>
+
+
+                        <button
+                          onclick="Teacher.rejectStudent('${esc(r.id)}')"
+                          class="bg-red-600
+                                 hover:bg-red-700
+                                 text-white
+                                 px-3
+                                 py-1.5
+                                 rounded-lg
+                                 text-xs
+                                 font-bold"
+                        >
+
+                          Reject
+
+                        </button>
+
+                      </div>
+
+                    </div>
+
+                  `
+                )
+                .join('')
         }
 
       </div>
 
     `;
 
-
-    // Refresh notification count after loading
-    // the actual approval list.
-
-    ApprovalManager.forceRefresh();
-
   },
 
 
-  async approveEnrollment(studentId) {
+  async approveStudent(
+    studentId
+  ) {
 
     try {
 
@@ -2676,12 +4686,12 @@ const Teacher = {
 
       Toast.show(
         'Approved',
-        'Student added to the class.',
+        'Student approved successfully.',
         'success'
       );
 
 
-      await Teacher.renderApprovals();
+      await Teacher.render();
 
 
       ApprovalManager.forceRefresh();
@@ -2691,7 +4701,9 @@ const Teacher = {
   },
 
 
-  async rejectEnrollment(studentId) {
+  async rejectStudent(
+    studentId
+  ) {
 
     try {
 
@@ -2703,12 +4715,12 @@ const Teacher = {
 
       Toast.show(
         'Rejected',
-        'Join request rejected.',
+        'Student request rejected.',
         'success'
       );
 
 
-      await Teacher.renderApprovals();
+      await Teacher.render();
 
 
       ApprovalManager.forceRefresh();
@@ -2737,769 +4749,244 @@ const Teacher = {
       Teacher.state.classId;
 
 
-    const sessions =
+    if (!cid) return;
+
+
+    const rows =
       await api(
         'GET',
-        `/attendance/sessions?classId=${cid}`
+        `/attendance/classes/${cid}/sessions`
       ).catch(() => []);
 
 
     box.innerHTML = `
 
       <div
-        class="glass-card rounded-2xl p-5 mb-4"
+        class="space-y-4"
       >
 
-        <form
-          onsubmit="return Teacher.openSession(event)"
-          class="flex flex-col sm:flex-row gap-2 items-end"
+        <div
+          class="flex
+                 items-center
+                 justify-between
+                 gap-3"
         >
 
           <div>
 
-            <label
-              class="block text-xs font-bold mb-1"
+            <h4
+              class="font-black"
             >
-              Session Date
-            </label>
 
-            <input
-              required
-              type="date"
-              id="att-date"
-              class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
+              Attendance
+
+            </h4>
+
+
+            <p
+              class="text-xs
+                     text-slate-500
+                     mt-1"
             >
+
+              Manage attendance sessions for this class.
+
+            </p>
 
           </div>
 
 
           <button
+            onclick="Teacher.manageSession()"
             class="bg-eduBlue-600
+                   hover:bg-eduBlue-700
                    text-white
-                   px-4 py-2
+                   px-4
+                   py-2
                    rounded-xl
-                   text-sm
+                   text-xs
                    font-bold"
           >
 
-            <i class="fa-solid fa-play"></i>
+            <i
+              class="fa-solid fa-plus mr-1"
+            ></i>
 
-            Open Attendance Session
+            New Session
 
           </button>
 
-        </form>
+        </div>
 
 
         <div
-          id="att-session-box"
-          class="mt-4"
-        ></div>
-
-      </div>
-
-
-      <div
-        class="glass-card rounded-2xl p-4"
-      >
-
-        <h4 class="font-bold mb-3">
-
-          <i
-            class="fa-solid fa-list-check text-eduBlue-600"
-          ></i>
-
-          All Sessions — Manual Entry / Review
-
-        </h4>
-
-
-        <div
-          id="att-sessions-list"
+          class="glass-card
+                 rounded-2xl
+                 overflow-hidden"
         >
 
-          ${Teacher.sessionsListHtml(sessions)}
+          ${
+            Array.isArray(rows) &&
+            rows.length
+
+              ? rows
+                  .map(
+                    r => `
+
+                      <div
+                        class="p-4
+                               border-b
+                               last:border-b-0"
+                      >
+
+                        <div
+                          class="flex
+                                 items-center
+                                 justify-between
+                                 gap-3"
+                        >
+
+                          <div>
+
+                            <b>
+
+                              ${esc(
+                                r.session_date ||
+                                r.date ||
+                                'Attendance Session'
+                              )}
+
+                            </b>
+
+
+                            <p
+                              class="text-xs
+                                     text-slate-500
+                                     mt-1"
+                            >
+
+                              ${esc(
+                                r.status ||
+                                ''
+                              )}
+
+                            </p>
+
+                          </div>
+
+
+                          <button
+                            onclick="Teacher.openSession('${esc(r.id)}')"
+                            class="text-xs
+                                   font-bold
+                                   text-eduBlue-600"
+                          >
+
+                            Manage
+
+                          </button>
+
+                        </div>
+
+                      </div>
+
+                    `
+                  )
+                  .join('')
+
+              : `
+
+                <div
+                  class="text-center
+                         py-10
+                         text-sm
+                         text-slate-500"
+                >
+
+                  No attendance sessions yet.
+
+                </div>
+
+              `
+          }
 
         </div>
 
       </div>
 
-
-      <div
-        id="att-manual-box"
-      ></div>
-
     `;
+
+  },
+
+
+  // ==========================================================
+  // ATTENDANCE SESSION CREATION
+  // ==========================================================
+
+  manageSession() {
+
+    const cid =
+      Teacher.state.classId;
+
+
+    if (!cid) return;
 
 
     const date =
-      document.getElementById(
-        'att-date'
-      );
-
-
-    if (date) {
-
-      date.value =
+      prompt(
+        'Enter attendance date (YYYY-MM-DD):',
         new Date()
           .toISOString()
-          .slice(0, 10);
-
-    }
-
-
-    Teacher._sessions =
-      sessions;
-
-  },
-
-
-  sessionsListHtml(sessions) {
-
-    if (!sessions.length) {
-
-      return `
-
-        <p class="text-sm text-slate-500 italic">
-
-          No attendance sessions yet.
-          Open one above, or create one just
-          to record attendance manually.
-
-        </p>
-
-      `;
-
-    }
-
-
-    return `
-
-      <div class="space-y-1">
-
-        ${sessions.map(s => `
-
-          <div
-            class="flex flex-col sm:flex-row
-                   sm:justify-between
-                   sm:items-center
-                   gap-2
-                   text-sm
-                   border-b
-                   py-2"
-          >
-
-            <div>
-
-              <b>
-                ${esc(s.session_date)}
-              </b>
-
-
-              <span
-                class="text-[10px]
-                       font-bold
-                       uppercase
-                       px-2
-                       py-0.5
-                       rounded
-                       ${s.status === 'open'
-                         ? 'bg-emerald-100 text-emerald-700'
-                         : 'bg-slate-100 text-slate-600'}
-                       ml-2"
-              >
-
-                ${esc(s.status)}
-
-              </span>
-
-
-              <span
-                class="text-xs text-slate-400 ml-2"
-              >
-
-                ${s.recorded_count}
-                recorded
-
-              </span>
-
-            </div>
-
-
-            <button
-              onclick="Teacher.manageSession('${s.id}')"
-              class="text-xs
-                     font-bold
-                     text-eduBlue-600"
-            >
-
-              <i class="fa-solid fa-pen"></i>
-
-              Manage Attendance
-
-            </button>
-
-          </div>
-
-        `).join('')}
-
-      </div>
-
-    `;
-
-  },
-
-
-  async manageSession(sessionId) {
-
-    const box =
-      document.getElementById(
-        'att-manual-box'
+          .slice(0, 10)
       );
 
 
-    if (!box) return;
+    if (!date) return;
 
 
-    box.innerHTML = `
-
-      <div
-        class="glass-card
-               rounded-2xl
-               p-4
-               mt-4
-               text-slate-400
-               text-sm"
-      >
-
-        Loading roster…
-
-      </div>
-
-    `;
-
-
-    const data =
-      await api(
-        'GET',
-        `/attendance/sessions/${sessionId}/roster`
-      ).catch(() => null);
-
-
-    if (!data) {
-
-      box.innerHTML = '';
-
-      return;
-
-    }
-
-
-    const {
-      session,
-      roster
-    } = data;
-
-
-    const statusBtn =
-      (
-        studentId,
-        status,
-        current
-      ) => {
-
-        const active =
-          current === status;
-
-
-        const colors = {
-
-          present:
-            'emerald',
-
-          late:
-            'amber',
-
-          absent:
-            'red',
-
-          excused:
-            'slate'
-
-        };
-
-
-        const c =
-          colors[status];
-
-
-        return `
-
-          <button
-            onclick="Teacher.setAttendance('${sessionId}','${studentId}','${status}')"
-            class="px-2
-                   py-1
-                   rounded-lg
-                   text-[11px]
-                   font-bold
-                   border
-                   ${
-                     active
-
-                       ? `bg-${c}-600
-                          text-white
-                          border-${c}-600`
-
-                       : `bg-white
-                          text-${c}-700
-                          border-${c}-300
-                          hover:bg-${c}-50`
-                   }"
-          >
-
-            ${status[0].toUpperCase() + status.slice(1)}
-
-          </button>
-
-        `;
-
-      };
-
-
-    box.innerHTML = `
-
-      <div
-        class="glass-card
-               rounded-2xl
-               p-4
-               mt-4"
-      >
-
-        <div
-          class="flex flex-col sm:flex-row
-                 sm:justify-between
-                 sm:items-center
-                 gap-2
-                 mb-3"
-        >
-
-          <h4 class="font-bold">
-
-            Manual Attendance —
-            ${esc(session.session_date)}
-
-            <span
-              class="text-xs
-                     text-slate-400
-                     font-normal"
-            >
-
-              (
-              ${esc(session.status)}
-
-              ${
-                session.status === 'open'
-                  ? `, code ${esc(session.attendance_code)}`
-                  : ''
-              }
-
-              )
-
-            </span>
-
-          </h4>
-
-
-          ${
-            session.status === 'open'
-
-              ? `
-
-                <button
-                  onclick="Teacher.closeSession('${session.id}', true)"
-                  class="text-xs
-                         font-bold
-                         text-red-600"
-                >
-
-                  <i class="fa-solid fa-stop"></i>
-
-                  Close Session
-
-                </button>
-
-              `
-
-              : ''
-          }
-
-        </div>
-
-
-        <div class="space-y-2">
-
-          ${roster.map(s => `
-
-            <div
-              class="flex flex-col sm:flex-row
-                     sm:justify-between
-                     sm:items-center
-                     gap-2
-                     text-sm
-                     border-b
-                     py-2"
-            >
-
-              <span>
-
-                ${esc(s.last_name)},
-                ${esc(s.first_name)}
-
-                <span
-                  class="text-slate-400 text-xs"
-                >
-
-                  (${esc(s.student_number)})
-
-                </span>
-
-              </span>
-
-
-              <div
-                class="flex gap-1 flex-wrap"
-              >
-
-                ${[
-                  'present',
-                  'late',
-                  'absent',
-                  'excused'
-                ]
-                  .map(st =>
-                    statusBtn(
-                      s.id,
-                      st,
-                      s.status
-                    )
-                  )
-                  .join('')}
-
-              </div>
-
-            </div>
-
-          `).join('')}
-
-        </div>
-
-      </div>
-
-    `;
+    Teacher.startAttendanceSession(
+      date
+    );
 
   },
 
 
-  async setAttendance(
-    sessionId,
-    studentId,
-    status
-  ) {
-
-    try {
-
-      await api(
-        'PUT',
-        `/attendance/sessions/${sessionId}/records/${studentId}`,
-        { status }
-      );
-
-
-      Toast.show(
-        'Saved',
-        `Marked ${status}.`,
-        'success'
-      );
-
-
-      Teacher.manageSession(
-        sessionId
-      );
-
-    } catch {}
-
-  },
-
-
-  async openSession(e) {
-
-    e.preventDefault();
-
-
-    try {
-
-      const s =
-        await api(
-          'POST',
-          '/attendance/sessions',
-          {
-            classId:
-              Teacher.state.classId,
-
-            sessionDate:
-              val('att-date')
-          }
-        );
-
-
-      Teacher._session =
-        s;
-
-
-      document
-        .getElementById(
-          'att-session-box'
-        )
-        .innerHTML = `
-
-          <div
-            class="bg-eduYellow-100
-                   border
-                   border-eduYellow-400
-                   rounded-xl
-                   p-4
-                   text-center"
-          >
-
-            <p
-              class="text-xs
-                     font-bold
-                     uppercase
-                     text-eduBlue-800"
-            >
-
-              Attendance Code
-              (expires in 15 min)
-
-            </p>
-
-
-            <p
-              class="text-4xl
-                     font-black
-                     tracking-widest
-                     text-eduBlue-800
-                     my-2"
-            >
-
-              ${esc(s.attendance_code)}
-
-            </p>
-
-
-            <button
-              onclick="Teacher.closeSession('${s.id}')"
-              class="bg-red-600
-                     text-white
-                     px-4
-                     py-2
-                     rounded-xl
-                     text-sm
-                     font-bold
-                     mt-2"
-            >
-
-              <i class="fa-solid fa-stop"></i>
-
-              Close Session
-
-            </button>
-
-          </div>
-
-        `;
-
-
-      Teacher.renderAttendanceSessionsList();
-
-    } catch {}
-
-
-    return false;
-
-  },
-
-
-  async renderAttendanceSessionsList() {
-
-    const sessions =
-      await api(
-        'GET',
-        `/attendance/sessions?classId=${Teacher.state.classId}`
-      ).catch(() => []);
-
-
-    Teacher._sessions =
-      sessions;
-
-
-    const el =
-      document.getElementById(
-        'att-sessions-list'
-      );
-
-
-    if (el) {
-
-      el.innerHTML =
-        Teacher.sessionsListHtml(
-          sessions
-        );
-
-    }
-
-  },
-
-
-  async closeSession(
-    sessionId,
-    fromManual
+  async startAttendanceSession(
+    date
   ) {
 
     try {
 
       await api(
         'POST',
-        `/attendance/sessions/${sessionId}/close`
+        '/attendance/sessions',
+        {
+          classId:
+            Teacher.state.classId,
+
+          sessionDate:
+            date
+        }
       );
 
 
       Toast.show(
-        'Closed',
-        'Attendance session closed.',
+        'Session Created',
+        'Attendance session created.',
         'success'
       );
 
 
-      if (fromManual) {
-
-        Teacher.manageSession(
-          sessionId
-        );
-
-      } else {
-
-        const box =
-          document.getElementById(
-            'att-session-box'
-          );
-
-
-        if (box) {
-
-          box.innerHTML = `
-
-            <p
-              class="text-sm
-                     text-slate-500
-                     italic"
-            >
-
-              Session closed.
-              The code is no longer valid.
-
-            </p>
-
-          `;
-
-        }
-
-      }
-
-
-      Teacher.renderAttendanceSessionsList();
+      Teacher.renderAttendance();
 
     } catch {}
 
   },
 
 
-  // ==========================================================
-  // QUIZ / PERFORMANCE / EXAM
-  // ==========================================================
-
-  async renderAssessmentTab(kind) {
-
-    const cfg = {
-
-      quizzes: {
-
-        endpoint:
-          '/assessments/quizzes',
-
-        createEndpoint:
-          '/assessments/quizzes',
-
-        maxField:
-          'total_items',
-
-        label:
-          'Quiz',
-
-        extra:
-          'Total Items'
-
-      },
-
-
-      performance: {
-
-        endpoint:
-          '/assessments/performance-tasks',
-
-        createEndpoint:
-          '/assessments/performance-tasks',
-
-        maxField:
-          'max_score',
-
-        label:
-          'Performance Task',
-
-        extra:
-          'Max Score'
-
-      },
-
-
-      exams: {
-
-        endpoint:
-          '/assessments/exams',
-
-        createEndpoint:
-          '/assessments/exams',
-
-        maxField:
-          'max_score',
-
-        label:
-          'Examination',
-
-        extra:
-          'Max Score'
-
-      }
-
-    }[kind];
-
-
-    Teacher._assessCfg =
-      cfg;
-
-    Teacher._assessKind =
-      kind;
-
+  async openSession(
+    sessionId
+  ) {
 
     const box =
       document.getElementById(
@@ -3507,15 +4994,17 @@ const Teacher = {
       );
 
 
-    const cid =
-      Teacher.state.classId;
+    if (!box) return;
 
 
-    const items =
+    const rows =
       await api(
         'GET',
-        `${cfg.endpoint}?classId=${cid}`
-      ).catch(() => []);
+        `/attendance/sessions/${sessionId}`
+      ).catch(() => null);
+
+
+    if (!rows) return;
 
 
     box.innerHTML = `
@@ -3523,101 +5012,176 @@ const Teacher = {
       <div
         class="glass-card
                rounded-2xl
-               p-5
-               mb-4"
+               p-5"
       >
 
-        <h4 class="font-bold mb-3">
-
-          Create
-          ${cfg.label}
-
-        </h4>
-
-
-        <form
-          onsubmit="return Teacher.createAssessment(event)"
-          class="grid grid-cols-2 md:grid-cols-4 gap-2"
+        <button
+          onclick="Teacher.renderAttendance()"
+          class="text-sm
+                 font-bold
+                 text-eduBlue-600
+                 mb-4"
         >
 
-          <input
-            required
-            id="as-title"
-            placeholder="Title *"
-            class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-          >
+          <i
+            class="fa-solid fa-arrow-left mr-1"
+          ></i>
+
+          Back to Attendance
+
+        </button>
 
 
-          ${
-            kind === 'exams'
-
-              ? `
-
-                <input
-                  required
-                  id="as-examType"
-                  placeholder="Exam Type (Midterm/Final/...) *"
-                  class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-                >
-
-              `
-
-              : ''
-          }
-
-
-          <input
-            required
-            type="number"
-            step="any"
-            id="as-max"
-            placeholder="${cfg.extra} *"
-            class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-          >
-
-
-          <input
-            type="date"
-            id="as-date"
-            class="px-3 py-2 rounded-xl border border-slate-300 text-sm"
-          >
-
-
-          <button
-            class="bg-eduBlue-600
-                   text-white
-                   py-2
-                   rounded-xl
-                   text-sm
-                   font-bold"
-          >
-
-            Create
-
-          </button>
-
-        </form>
+        <pre
+          class="text-xs
+                 whitespace-pre-wrap"
+        >${esc(
+          JSON.stringify(
+            rows,
+            null,
+            2
+          )
+        )}</pre>
 
       </div>
 
+    `;
 
-      <div class="space-y-4">
+  },
 
-        ${
-          items.length
 
-            ? items
-                .map(i =>
-                  Teacher.assessmentCard(
-                    kind,
-                    i,
-                    cfg
+  // ==========================================================
+  // ASSESSMENTS
+  // ==========================================================
+
+  async renderAssessment(
+    kind
+  ) {
+
+    const box =
+      document.getElementById(
+        'teacher-tab-content'
+      );
+
+
+    if (!box) return;
+
+
+    const cid =
+      Teacher.state.classId;
+
+
+    if (!cid) return;
+
+
+    const endpoint =
+      kind === 'quizzes'
+        ? `/assessments/classes/${cid}/quizzes`
+        : kind === 'performance'
+          ? `/assessments/classes/${cid}/performance-tasks`
+          : `/assessments/classes/${cid}/exams`;
+
+
+    const rows =
+      await api(
+        'GET',
+        endpoint
+      ).catch(() => []);
+
+
+    const title =
+      kind === 'quizzes'
+        ? 'Quizzes'
+        : kind === 'performance'
+          ? 'Performance Tasks'
+          : 'Examinations';
+
+
+    box.innerHTML = `
+
+      <div
+        class="space-y-4"
+      >
+
+        <div
+          class="flex
+                 flex-col
+                 sm:flex-row
+                 sm:items-center
+                 sm:justify-between
+                 gap-3"
+        >
+
+          <div>
+
+            <h4
+              class="font-black"
+            >
+
+              ${title}
+
+            </h4>
+
+
+            <p
+              class="text-xs
+                     text-slate-500
+                     mt-1"
+            >
+
+              Manage ${kind.replace('-', ' ')}
+              for this class.
+
+            </p>
+
+          </div>
+
+
+          <button
+            onclick="Teacher.createAssessment('${kind}')"
+            class="bg-eduBlue-600
+                   hover:bg-eduBlue-700
+                   text-white
+                   px-4
+                   py-2
+                   rounded-xl
+                   text-xs
+                   font-bold"
+          >
+
+            <i
+              class="fa-solid fa-plus mr-1"
+            ></i>
+
+            Add ${title.replace('Examinations', 'Exam')}
+
+          </button>
+
+        </div>
+
+
+        <div
+          class="grid
+                 grid-cols-1
+                 md:grid-cols-2
+                 gap-4"
+        >
+
+          ${
+            Array.isArray(rows)
+              ? rows
+                  .map(
+                    r =>
+                      Teacher.assessmentCard(
+                        r,
+                        kind
+                      )
                   )
-                )
-                .join('')
+                  .join('')
+              : ''
+          }
 
-            : '<p class="text-sm text-slate-500 italic">None created yet.</p>'
-        }
+        </div>
 
       </div>
 
@@ -3627,10 +5191,13 @@ const Teacher = {
 
 
   assessmentCard(
-    kind,
     item,
-    cfg
+    kind
   ) {
+
+    const id =
+      item.id;
+
 
     return `
 
@@ -3642,99 +5209,114 @@ const Teacher = {
 
         <div
           class="flex
+                 items-start
                  justify-between
-                 items-center"
+                 gap-3"
         >
 
           <div>
 
-            <h5 class="font-bold">
+            <h5
+              class="font-black"
+            >
 
-              ${esc(item.title)}
-
-              ${
-                item.exam_type
-                  ? `
-
-                    <span
-                      class="text-xs text-slate-500"
-                    >
-                      (${esc(item.exam_type)})
-                    </span>
-
-                  `
-                  : ''
-              }
+              ${esc(
+                item.title ||
+                item.name ||
+                'Assessment'
+              )}
 
             </h5>
 
 
             <p
-              class="text-xs text-slate-500"
+              class="text-xs
+                     text-slate-500
+                     mt-1"
             >
 
-              ${cfg.extra}:
-              ${item[cfg.maxField]}
-
-              ${
-                item.is_locked
-                  ? ' · <span class="text-red-600 font-bold">LOCKED</span>'
-                  : ''
-              }
+              Max Score:
+              ${esc(
+                item.max_score ??
+                item.maxScore ??
+                '—'
+              )}
 
             </p>
 
           </div>
 
 
-          <div class="flex gap-2">
-
-            <button
-              onclick="Teacher.showScoreEntry('${kind}','${item.id}', ${item[cfg.maxField]})"
-              class="text-xs
-                     font-bold
-                     text-eduBlue-600"
-            >
-
-              <i class="fa-solid fa-pen"></i>
-
-              Enter Scores
-
-            </button>
-
+          <span
+            class="text-[10px]
+                   uppercase
+                   font-bold
+                   px-2
+                   py-1
+                   rounded-full
+                   ${
+                     item.is_locked
+                       ? 'bg-slate-100 text-slate-500'
+                       : 'bg-emerald-100 text-emerald-700'
+                   }"
+          >
 
             ${
-              !item.is_locked
-
-                ? `
-
-                  <button
-                    onclick="Teacher.lockAssessment('${kind}','${item.id}')"
-                    class="text-xs
-                           font-bold
-                           text-red-600"
-                  >
-
-                    <i class="fa-solid fa-lock"></i>
-
-                    Lock
-
-                  </button>
-
-                `
-
-                : ''
+              item.is_locked
+                ? 'Locked'
+                : 'Open'
             }
 
-          </div>
+          </span>
 
         </div>
 
 
         <div
-          id="score-entry-${item.id}"
-          class="hidden mt-3 border-t pt-3"
-        ></div>
+          class="flex
+                 flex-wrap
+                 gap-2
+                 mt-4"
+        >
+
+          <button
+            onclick="Teacher.showScoreEntry('${kind}', '${esc(id)}')"
+            class="bg-eduBlue-600
+                   hover:bg-eduBlue-700
+                   text-white
+                   px-3
+                   py-2
+                   rounded-lg
+                   text-xs
+                   font-bold"
+          >
+
+            Enter Scores
+
+          </button>
+
+
+          <button
+            onclick="Teacher.lockAssessment('${kind}', '${esc(id)}')"
+            class="bg-slate-100
+                   hover:bg-slate-200
+                   text-slate-700
+                   px-3
+                   py-2
+                   rounded-lg
+                   text-xs
+                   font-bold"
+          >
+
+            ${
+              item.is_locked
+                ? 'Locked'
+                : 'Lock'
+            }
+
+          </button>
+
+        </div>
 
       </div>
 
@@ -3743,100 +5325,69 @@ const Teacher = {
   },
 
 
-  async createAssessment(e) {
+  async createAssessment(
+    kind
+  ) {
 
-    e.preventDefault();
-
-
-    const kind =
-      Teacher._assessKind;
-
-
-    const cid =
-      Teacher.state.classId;
+    const title =
+      prompt(
+        'Assessment title:'
+      );
 
 
-    const payload = {
+    if (!title) return;
 
-      classId:
-        cid,
 
-      title:
-        val('as-title'),
-
-      maxScore:
-        parseFloat(
-          val('as-max')
+    const maxScore =
+      parseFloat(
+        prompt(
+          'Maximum score:',
+          '100'
         )
-
-    };
+      );
 
 
     if (
+      Number.isNaN(maxScore)
+    ) return;
+
+
+    const endpoint =
       kind === 'quizzes'
-    ) {
-
-      payload.totalItems =
-        payload.maxScore;
-
-    }
-
-
-    if (
-      kind === 'exams'
-    ) {
-
-      payload.examType =
-        val('as-examType');
-
-      payload.totalItems =
-        payload.maxScore;
-
-    }
-
-
-    if (
-      val('as-date')
-    ) {
-
-      payload[
-        kind === 'quizzes'
-          ? 'quizDate'
-          : kind === 'exams'
-            ? 'examDate'
-            : 'taskDate'
-      ] =
-        val('as-date');
-
-    }
+        ? '/assessments/quizzes'
+        : kind === 'performance'
+          ? '/assessments/performance-tasks'
+          : '/assessments/exams';
 
 
     try {
 
       await api(
         'POST',
-        Teacher
-          ._assessCfg
-          .createEndpoint,
-        payload
+        endpoint,
+        {
+          classId:
+            Teacher.state.classId,
+
+          title,
+
+          maxScore
+        }
       );
 
 
       Toast.show(
         'Created',
-        `${Teacher._assessCfg.label} created.`,
+        'Assessment created successfully.',
         'success'
       );
 
 
-      Teacher.renderAssessmentTab(
+      Teacher.renderAssessment(
         kind
       );
 
     } catch {}
-
-
-    return false;
 
   },
 
@@ -3846,15 +5397,11 @@ const Teacher = {
     id
   ) {
 
-    const path =
+    const endpoint =
       kind === 'quizzes'
-
         ? `/assessments/quizzes/${id}/lock`
-
         : kind === 'performance'
-
           ? `/assessments/performance-tasks/${id}/lock`
-
           : `/assessments/exams/${id}/lock`;
 
 
@@ -3862,18 +5409,18 @@ const Teacher = {
 
       await api(
         'POST',
-        path
+        endpoint
       );
 
 
       Toast.show(
-        'Locked',
-        'Scores locked.',
+        'Assessment Locked',
+        'Assessment has been locked.',
         'success'
       );
 
 
-      Teacher.renderAssessmentTab(
+      Teacher.renderAssessment(
         kind
       );
 
@@ -3884,38 +5431,16 @@ const Teacher = {
 
   async showScoreEntry(
     kind,
-    itemId,
-    maxScore
+    itemId
   ) {
 
     const box =
       document.getElementById(
-        `score-entry-${itemId}`
+        'teacher-tab-content'
       );
 
 
     if (!box) return;
-
-
-    box.classList.toggle(
-      'hidden'
-    );
-
-
-    if (
-      box.classList.contains(
-        'hidden'
-      ) ||
-      box.dataset.loaded
-    ) {
-
-      return;
-
-    }
-
-
-    box.dataset.loaded =
-      '1';
 
 
     const roster =
@@ -3927,68 +5452,130 @@ const Teacher = {
 
     box.innerHTML = `
 
-      <div class="space-y-1">
+      <div
+        class="space-y-4"
+      >
 
-        ${roster.map(s => `
+        <button
+          onclick="Teacher.renderAssessment('${kind}')"
+          class="text-sm
+                 font-bold
+                 text-eduBlue-600"
+        >
 
-          <div
-            class="flex items-center
-                   justify-between
-                   gap-2
-                   text-sm"
+          <i
+            class="fa-solid
+                   fa-arrow-left
+                   mr-1"
+          ></i>
+
+          Back
+
+        </button>
+
+
+        <div
+          class="glass-card
+                 rounded-2xl
+                 p-4"
+        >
+
+          <h4
+            class="font-black
+                   mb-4"
           >
 
-            <span>
+            Enter Scores
 
-              ${esc(s.last_name)},
-              ${esc(s.first_name)}
-
-              <span
-                class="text-slate-400 text-xs"
-              >
-
-                (${esc(s.student_number)})
-
-              </span>
-
-            </span>
+          </h4>
 
 
-            <div
-              class="flex items-center gap-1"
-            >
+          <div
+            class="space-y-2"
+          >
 
-              <input
-                type="number"
-                step="any"
-                min="0"
-                max="${maxScore}"
-                id="score-${itemId}-${s.id}"
-                placeholder="/ ${maxScore}"
-                class="w-24 px-2 py-1 rounded-lg border border-slate-300 text-sm"
-              >
+            ${
+              Array.isArray(roster)
+                ? roster
+                    .map(
+                      s => `
+
+                        <div
+                          class="flex
+                                 flex-col
+                                 sm:flex-row
+                                 sm:items-center
+                                 sm:justify-between
+                                 gap-2
+                                 border-b
+                                 py-3"
+                        >
+
+                          <span
+                            class="font-semibold
+                                   text-sm"
+                          >
+
+                            ${esc(
+                              s.last_name || ''
+                            )}
+
+                            ,
+
+                            ${esc(
+                              s.first_name || ''
+                            )}
+
+                          </span>
 
 
-              <button
-                onclick="Teacher.saveScore('${kind}','${itemId}','${s.id}')"
-                class="text-xs
-                       bg-eduBlue-600
-                       text-white
-                       px-2
-                       py-1
-                       rounded-lg
-                       font-bold"
-              >
+                          <div
+                            class="flex
+                                   gap-2"
+                          >
 
-                Save
+                            <input
+                              id="score-${esc(itemId)}-${esc(s.id)}"
+                              type="number"
+                              step="any"
+                              placeholder="Score"
+                              class="w-28
+                                     px-2
+                                     py-2
+                                     rounded-lg
+                                     border
+                                     border-slate-300"
+                            >
 
-              </button>
 
-            </div>
+                            <button
+                              onclick="Teacher.saveScore('${kind}', '${esc(itemId)}', '${esc(s.id)}')"
+                              class="bg-eduBlue-600
+                                     text-white
+                                     px-3
+                                     py-2
+                                     rounded-lg
+                                     text-xs
+                                     font-bold"
+                            >
+
+                              Save
+
+                            </button>
+
+                          </div>
+
+                        </div>
+
+                      `
+                    )
+                    .join('')
+                : ''
+            }
 
           </div>
 
-        `).join('')}
+        </div>
 
       </div>
 
@@ -4035,13 +5622,9 @@ const Teacher = {
 
     const path =
       kind === 'quizzes'
-
         ? `/assessments/quizzes/${itemId}/scores/${studentId}`
-
         : kind === 'performance'
-
           ? `/assessments/performance-tasks/${itemId}/scores/${studentId}`
-
           : `/assessments/exams/${itemId}/scores/${studentId}`;
 
 
@@ -4050,7 +5633,9 @@ const Teacher = {
       await api(
         'PUT',
         path,
-        { rawScore }
+        {
+          rawScore
+        }
       );
 
 
@@ -4100,7 +5685,10 @@ const Teacher = {
                max-w-md"
       >
 
-        <h4 class="font-bold mb-3">
+        <h4
+          class="font-bold
+                 mb-3"
+        >
 
           Grading Weights
           (must total 100%)
@@ -4118,37 +5706,48 @@ const Teacher = {
             'quiz_weight',
             'performance_weight',
             'exam_weight'
-          ].map(k => `
+          ]
+            .map(
+              k => `
 
-            <div
-              class="flex
-                     justify-between
-                     items-center"
-            >
+                <div
+                  class="flex
+                         justify-between
+                         items-center"
+                >
 
-              <label
-                class="text-sm capitalize"
-              >
+                  <label
+                    class="text-sm
+                           capitalize"
+                  >
 
-                ${k.replace(
-                  '_weight',
-                  ''
-                )}
+                    ${k.replace(
+                      '_weight',
+                      ''
+                    )}
 
-              </label>
+                  </label>
 
 
-              <input
-                type="number"
-                step="any"
-                id="w-${k}"
-                value="${w[k] ?? 0}"
-                class="w-24 px-2 py-1 rounded-lg border border-slate-300 text-sm"
-              >
+                  <input
+                    type="number"
+                    step="any"
+                    id="w-${k}"
+                    value="${w[k] ?? 0}"
+                    class="w-24
+                           px-2
+                           py-1
+                           rounded-lg
+                           border
+                           border-slate-300
+                           text-sm"
+                  >
 
-            </div>
+                </div>
 
-          `).join('')}
+              `
+            )
+            .join('')}
 
 
           <button
@@ -4188,14 +5787,16 @@ const Teacher = {
       'quiz_weight',
       'performance_weight',
       'exam_weight'
-    ].forEach(k => {
+    ].forEach(
+      k => {
 
-      payload[k] =
-        parseFloat(
-          val(`w-${k}`)
-        );
+        payload[k] =
+          parseFloat(
+            val(`w-${k}`)
+          );
 
-    });
+      }
+    );
 
 
     try {
@@ -4221,7 +5822,6 @@ const Teacher = {
   }
 
 };
-
 
 // ============================================================
 // ADMIN VIEW
