@@ -1,34 +1,44 @@
 const express = require('express');
 const crypto = require('crypto');
+
 const { pool } = require('../db');
 const {
   authenticate,
   requireRole,
   requireClassOwnership
 } = require('../middleware/auth');
+
 const { audit } = require('../utils/audit');
 const { isNonEmptyString } = require('../utils/validate');
 const { validateWeights } = require('../utils/grading');
 
 const router = express.Router();
 
+
+// ============================================================
+// AUTHENTICATION
+// ============================================================
+
 router.use(authenticate);
 
 
 // ============================================================
-// HELPER — GENERATE UNIQUE CLASS CODE
+// HELPERS
 // ============================================================
 
 function genClassCode(subject) {
-  const year = new Date().getFullYear();
 
-  const suffix = Math.random()
-    .toString(36)
-    .slice(2, 6)
-    .toUpperCase();
+  const year =
+    new Date().getFullYear();
+
+  const suffix =
+    Math.random()
+      .toString(36)
+      .slice(2, 6)
+      .toUpperCase();
 
   const prefix =
-    subject
+    String(subject || '')
       .replace(/[^A-Za-z0-9]/g, '')
       .slice(0, 6)
       .toUpperCase() || 'CLASS';
@@ -37,36 +47,38 @@ function genClassCode(subject) {
 }
 
 
-// ============================================================
-// HELPER — GET OR CREATE CURRENT ACADEMIC TERM
-// ============================================================
-
 async function getOrCreateCurrentTerm() {
 
-  const { rows } = await pool.query(`
-    SELECT *
-    FROM academic_terms
-    WHERE is_current = TRUE
-    ORDER BY academic_year DESC
-    LIMIT 1
-  `);
+  const { rows } =
+    await pool.query(
+      `
+      SELECT *
+      FROM academic_terms
+      WHERE is_current = TRUE
+      ORDER BY created_at DESC
+      LIMIT 1
+      `
+    );
 
   if (rows[0]) {
     return rows[0];
   }
 
-  const id = crypto.randomUUID();
+
+  const id =
+    crypto.randomUUID();
+
 
   await pool.query(
     `
-      INSERT INTO academic_terms
+    INSERT INTO academic_terms
       (
         id,
         academic_year,
         semester,
         is_current
       )
-      VALUES
+    VALUES
       (
         $1,
         $2,
@@ -81,22 +93,23 @@ async function getOrCreateCurrentTerm() {
     ]
   );
 
+
   return (
     await pool.query(
       `
-        SELECT *
-        FROM academic_terms
-        WHERE id = $1
+      SELECT *
+      FROM academic_terms
+      WHERE id = $1
       `,
       [id]
     )
   ).rows[0];
+
 }
 
 
 // ============================================================
 // CREATE CLASS
-// POST /classes
 // ============================================================
 
 router.post(
@@ -115,26 +128,33 @@ router.post(
       } = req.body;
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // VALIDATION
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
       if (
-        !isNonEmptyString(String(subject || '')) ||
-        !isNonEmptyString(String(section || '')) ||
-        !isNonEmptyString(String(yearLevel || ''))
+        !isNonEmptyString(
+          String(subject || '')
+        ) ||
+        !isNonEmptyString(
+          String(section || '')
+        ) ||
+        !isNonEmptyString(
+          String(yearLevel || '')
+        )
       ) {
 
         return res.status(400).json({
-          error: 'Subject, section, and year level are required.'
+          error:
+            'Subject, section, and year level are required.'
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // DETERMINE TEACHER
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // TEACHER
+      // ------------------------------------------------------
 
       const teacherId =
         req.user.role === 'teacher'
@@ -145,101 +165,116 @@ router.post(
       if (!teacherId) {
 
         return res.status(400).json({
-          error: 'teacherId is required for admin-created classes.'
+          error:
+            'teacherId is required for admin-created classes.'
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // DETERMINE ACADEMIC TERM
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // ACADEMIC TERM
+      // ------------------------------------------------------
 
-      const term = termId
-        ? (
-            await pool.query(
-              `
+      const term =
+        termId
+
+          ? (
+              await pool.query(
+                `
                 SELECT *
                 FROM academic_terms
                 WHERE id = $1
-              `,
-              [termId]
-            )
-          ).rows[0]
-        : await getOrCreateCurrentTerm();
+                `,
+                [termId]
+              )
+            ).rows[0]
+
+          : await getOrCreateCurrentTerm();
 
 
       if (!term) {
 
         return res.status(400).json({
-          error: 'Invalid academic term.'
+          error:
+            'Invalid academic term.'
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // GENERATE UNIQUE CLASS CODE
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // UNIQUE CLASS CODE
+      // ------------------------------------------------------
 
       let classCode;
       let exists = true;
 
+
       while (exists) {
 
-        classCode = genClassCode(subject);
+        classCode =
+          genClassCode(subject);
 
-        exists = (
-          await pool.query(
-            `
+
+        exists =
+          (
+            await pool.query(
+              `
               SELECT id
               FROM classes
               WHERE class_code = $1
-            `,
-            [classCode]
-          )
-        ).rows[0];
+              `,
+              [classCode]
+            )
+          ).rows[0];
 
       }
 
 
-      // --------------------------------------------------------
-      // CREATE CLASS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // CREATE CLASS + DEFAULT WEIGHTS
+      // ------------------------------------------------------
 
-      const id = crypto.randomUUID();
+      const id =
+        crypto.randomUUID();
 
-      const client = await pool.connect();
+
+      const client =
+        await pool.connect();
+
 
       try {
 
-        await client.query('BEGIN');
+        await client.query(
+          'BEGIN'
+        );
 
 
         await client.query(
           `
-            INSERT INTO classes
-            (
-              id,
-              teacher_id,
-              subject,
-              section,
-              year_level,
-              room_number,
-              term_id,
-              class_code
-            )
-            VALUES
-            (
-              $1,
-              $2,
-              $3,
-              $4,
-              $5,
-              $6,
-              $7,
-              $8
-            )
+          INSERT INTO classes
+          (
+            id,
+            teacher_id,
+            subject,
+            section,
+            year_level,
+            room_number,
+            term_id,
+            class_code
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8
+          )
           `,
           [
             id,
@@ -256,30 +291,30 @@ router.post(
         );
 
 
-        // ------------------------------------------------------
-        // CREATE DEFAULT GRADING WEIGHTS
-        // ------------------------------------------------------
-
         await client.query(
           `
-            INSERT INTO grading_weights
-            (
-              class_id
-            )
-            VALUES
-            (
-              $1
-            )
+          INSERT INTO grading_weights
+          (
+            class_id
+          )
+          VALUES
+          (
+            $1
+          )
           `,
           [id]
         );
 
 
-        await client.query('COMMIT');
+        await client.query(
+          'COMMIT'
+        );
 
       } catch (e) {
 
-        await client.query('ROLLBACK');
+        await client.query(
+          'ROLLBACK'
+        );
 
         throw e;
 
@@ -290,68 +325,70 @@ router.post(
       }
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // AUDIT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
-      await audit(req, {
-        action: 'class_creation',
-        recordType: 'class',
-        recordId: id,
+      await audit(
+        req,
+        {
+          action:
+            'class_creation',
 
-        newValue: {
-          subject: subject.trim(),
-          section: section.trim(),
-          yearLevel: yearLevel.trim(),
-          roomNumber: roomNumber
-            ? String(roomNumber).trim()
-            : null,
-          classCode
+          recordType:
+            'class',
+
+          recordId:
+            id,
+
+          newValue: {
+            subject:
+              subject.trim(),
+
+            section:
+              section.trim(),
+
+            yearLevel:
+              yearLevel.trim(),
+
+            roomNumber:
+              roomNumber
+                ? String(roomNumber).trim()
+                : null,
+
+            classCode
+          }
         }
-      });
+      );
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // RETURN CREATED CLASS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
-      const createdClass = (
-        await pool.query(
-          `
+      const created =
+        (
+          await pool.query(
+            `
             SELECT
               c.*,
               at.academic_year,
               at.semester,
-
-              (
-                SELECT COUNT(*)::int
-                FROM enrollments e
-                WHERE
-                  e.class_id = c.id
-                  AND e.status = 'active'
-              ) AS student_count,
-
-              (
-                SELECT COUNT(*)::int
-                FROM enrollments e
-                WHERE
-                  e.class_id = c.id
-                  AND e.status = 'pending'
-              ) AS pending_count
-
+              0::int AS student_count,
+              0::int AS pending_count
             FROM classes c
-
             LEFT JOIN academic_terms at
               ON at.id = c.term_id
-
             WHERE c.id = $1
-          `,
-          [id]
-        )
-      ).rows[0];
+            `,
+            [id]
+          )
+        ).rows[0];
 
 
-      res.status(201).json(createdClass);
+      res.status(201).json(
+        created
+      );
 
     } catch (e) {
 
@@ -365,19 +402,22 @@ router.post(
 
 // ============================================================
 // LIST CLASSES
-// GET /classes
 //
-// ADMIN:
+// Teacher:
+//   Returns only classes owned by logged-in teacher.
+//
+// Admin:
 //   Returns all classes.
 //
-// TEACHER:
-//   Returns only classes owned by the teacher,
-//   including student count, pending count,
-//   academic year and semester.
+// Student:
+//   Returns classes where student has an active/pending
+//   enrollment.
 //
-// STUDENT:
-//   Returns classes where the student is
-//   active or pending.
+// Teacher result now includes:
+//   student_count
+//   pending_count
+//   academic_year
+//   semester
 // ============================================================
 
 router.get(
@@ -386,57 +426,20 @@ router.get(
 
     try {
 
-      // ========================================================
+      // ======================================================
       // ADMIN
-      // ========================================================
+      // ======================================================
 
-      if (req.user.role === 'admin') {
+      if (
+        req.user.role === 'admin'
+      ) {
 
-        const { rows } = await pool.query(`
-          SELECT
-            c.*,
-            at.academic_year,
-            at.semester,
-
-            (
-              SELECT COUNT(*)::int
-              FROM enrollments e
-              WHERE
-                e.class_id = c.id
-                AND e.status = 'active'
-            ) AS student_count,
-
-            (
-              SELECT COUNT(*)::int
-              FROM enrollments e
-              WHERE
-                e.class_id = c.id
-                AND e.status = 'pending'
-            ) AS pending_count
-
-          FROM classes c
-
-          LEFT JOIN academic_terms at
-            ON at.id = c.term_id
-
-          ORDER BY c.created_at DESC
-        `);
-
-        return res.json(rows);
-
-      }
-
-
-      // ========================================================
-      // TEACHER
-      // ========================================================
-
-      if (req.user.role === 'teacher') {
-
-        const { rows } = await pool.query(
-          `
+        const { rows } =
+          await pool.query(
+            `
             SELECT
               c.*,
+
               at.academic_year,
               at.semester,
 
@@ -461,29 +464,88 @@ router.get(
             LEFT JOIN academic_terms at
               ON at.id = c.term_id
 
-            WHERE c.teacher_id = $1
+            ORDER BY
+              c.created_at DESC
+            `
+          );
 
-            ORDER BY c.created_at DESC
-          `,
-          [req.user.id]
+
+        return res.json(
+          rows
         );
-
-        return res.json(rows);
 
       }
 
 
-      // ========================================================
-      // STUDENT
-      // ========================================================
+      // ======================================================
+      // TEACHER
+      // ======================================================
 
-      const { rows } = await pool.query(
-        `
+      if (
+        req.user.role === 'teacher'
+      ) {
+
+        const { rows } =
+          await pool.query(
+            `
+            SELECT
+              c.*,
+
+              at.academic_year,
+              at.semester,
+
+              (
+                SELECT COUNT(*)::int
+                FROM enrollments e
+                WHERE
+                  e.class_id = c.id
+                  AND e.status = 'active'
+              ) AS student_count,
+
+              (
+                SELECT COUNT(*)::int
+                FROM enrollments e
+                WHERE
+                  e.class_id = c.id
+                  AND e.status = 'pending'
+              ) AS pending_count
+
+            FROM classes c
+
+            LEFT JOIN academic_terms at
+              ON at.id = c.term_id
+
+            WHERE
+              c.teacher_id = $1
+
+            ORDER BY
+              c.created_at DESC
+            `,
+            [req.user.id]
+          );
+
+
+        return res.json(
+          rows
+        );
+
+      }
+
+
+      // ======================================================
+      // STUDENT
+      // ======================================================
+
+      const { rows } =
+        await pool.query(
+          `
           SELECT
             c.*,
+
+            e.status AS enrollment_status,
+
             at.academic_year,
-            at.semester,
-            e.status AS enrollment_status
+            at.semester
 
           FROM classes c
 
@@ -495,15 +557,22 @@ router.get(
 
           WHERE
             e.student_id = $1
-            AND e.status IN ('active', 'pending')
+            AND e.status IN
+              (
+                'active',
+                'pending'
+              )
 
-          ORDER BY c.created_at DESC
-        `,
-        [req.user.id]
+          ORDER BY
+            c.created_at DESC
+          `,
+          [req.user.id]
+        );
+
+
+      return res.json(
+        rows
       );
-
-
-      res.json(rows);
 
     } catch (e) {
 
@@ -516,23 +585,25 @@ router.get(
 
 
 // ============================================================
-// UPDATE CLASS
-// PUT /classes/:classId
+// EDIT CLASS
 //
-// Teachers can edit ONLY their own classes.
-// Admin can edit any class.
+// Teacher:
+//   Can edit only their own class.
+//
+// Admin:
+//   Can edit any class.
 //
 // Editable:
-//   - Subject
-//   - Section
-//   - Year Level
-//   - Room Number
+//   subject
+//   section
+//   yearLevel
+//   roomNumber
 //
-// NOT editable here:
-//   - Class Code
-//   - Teacher
-//   - Academic Term
-//   - Grading Weights
+// NOT editable:
+//   classCode
+//   teacher_id
+//   term_id
+//   grading weights
 // ============================================================
 
 router.put(
@@ -550,58 +621,74 @@ router.put(
       } = req.body;
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // VALIDATION
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
       if (
-        !isNonEmptyString(String(subject || '')) ||
-        !isNonEmptyString(String(section || '')) ||
-        !isNonEmptyString(String(yearLevel || ''))
+        !isNonEmptyString(
+          String(subject || '')
+        ) ||
+        !isNonEmptyString(
+          String(section || '')
+        ) ||
+        !isNonEmptyString(
+          String(yearLevel || '')
+        )
       ) {
 
         return res.status(400).json({
-          error: 'Subject, section, and year level are required.'
+          error:
+            'Subject, section, and year level are required.'
         });
 
       }
 
 
-      const classId = req.params.classId;
+      const classId =
+        req.params.classId;
 
 
-      // --------------------------------------------------------
-      // GET EXISTING CLASS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // FETCH EXISTING CLASS
+      // ------------------------------------------------------
 
-      const existing = (
-        await pool.query(
-          `
+      const existing =
+        (
+          await pool.query(
+            `
             SELECT *
             FROM classes
             WHERE id = $1
-          `,
-          [classId]
-        )
-      ).rows[0];
+            `,
+            [classId]
+          )
+        ).rows[0];
 
 
       if (!existing) {
 
         return res.status(404).json({
-          error: 'Class not found.'
+          error:
+            'Class not found.'
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // UPDATE CLASS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // UPDATE
+      //
+      // Deliberately does NOT modify:
+      //   class_code
+      //   teacher_id
+      //   term_id
+      // ------------------------------------------------------
 
-      const updated = (
-        await pool.query(
-          `
+      const updated =
+        (
+          await pool.query(
+            `
             UPDATE classes
 
             SET
@@ -613,58 +700,80 @@ router.put(
             WHERE id = $5
 
             RETURNING *
-          `,
-          [
-            subject.trim(),
-            section.trim(),
-            yearLevel.trim(),
-            roomNumber
-              ? String(roomNumber).trim()
-              : null,
-            classId
-          ]
-        )
-      ).rows[0];
+            `,
+            [
+              subject.trim(),
+              section.trim(),
+              yearLevel.trim(),
+
+              roomNumber
+                ? String(roomNumber).trim()
+                : null,
+
+              classId
+            ]
+          )
+        ).rows[0];
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // AUDIT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
-      await audit(req, {
+      await audit(
+        req,
+        {
+          action:
+            'class_updated',
 
-        action: 'class_updated',
+          recordType:
+            'class',
 
-        recordType: 'class',
+          recordId:
+            classId,
 
-        recordId: classId,
+          previousValue: {
+            subject:
+              existing.subject,
 
-        previousValue: {
-          subject: existing.subject,
-          section: existing.section,
-          year_level: existing.year_level,
-          room_number: existing.room_number
-        },
+            section:
+              existing.section,
 
-        newValue: {
-          subject: updated.subject,
-          section: updated.section,
-          year_level: updated.year_level,
-          room_number: updated.room_number
+            year_level:
+              existing.year_level,
+
+            room_number:
+              existing.room_number
+          },
+
+          newValue: {
+            subject:
+              updated.subject,
+
+            section:
+              updated.section,
+
+            year_level:
+              updated.year_level,
+
+            room_number:
+              updated.room_number
+          }
         }
+      );
 
-      });
 
+      // ------------------------------------------------------
+      // RETURN UPDATED CLASS WITH COUNTS
+      // ------------------------------------------------------
 
-      // --------------------------------------------------------
-      // RETURN UPDATED CLASS
-      // --------------------------------------------------------
-
-      const fullUpdatedClass = (
-        await pool.query(
-          `
+      const result =
+        (
+          await pool.query(
+            `
             SELECT
               c.*,
+
               at.academic_year,
               at.semester,
 
@@ -690,18 +799,18 @@ router.put(
               ON at.id = c.term_id
 
             WHERE c.id = $1
-          `,
-          [classId]
-        )
-      ).rows[0];
+            `,
+            [classId]
+          )
+        ).rows[0];
 
 
       res.json({
+        message:
+          'Class updated successfully.',
 
-        message: 'Class updated successfully.',
-
-        class: fullUpdatedClass
-
+        class:
+          result
       });
 
     } catch (e) {
@@ -716,12 +825,10 @@ router.put(
 
 // ============================================================
 // JOIN CLASS VIA CLASS CODE
-// POST /classes/join
 //
-// STUDENT ONLY
-//
-// Creates a PENDING enrollment request.
-// Teacher must approve before student becomes active.
+// Student submits a class code.
+// Enrollment begins as PENDING.
+// Teacher must approve.
 // ============================================================
 
 router.post(
@@ -731,72 +838,72 @@ router.post(
 
     try {
 
-      const { classCode } = req.body;
+      const {
+        classCode
+      } = req.body;
 
 
-      if (!isNonEmptyString(classCode)) {
+      if (
+        !isNonEmptyString(
+          classCode
+        )
+      ) {
 
         return res.status(400).json({
-          error: 'Class code is required.'
+          error:
+            'Class code is required.'
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // FIND CLASS
-      // --------------------------------------------------------
-
-      const cls = (
-        await pool.query(
-          `
-            SELECT
-              c.*,
-              at.academic_year,
-              at.semester
-
-            FROM classes c
-
-            LEFT JOIN academic_terms at
-              ON at.id = c.term_id
-
+      const cls =
+        (
+          await pool.query(
+            `
+            SELECT *
+            FROM classes
             WHERE
-              c.class_code = $1
-              AND c.is_active = TRUE
-          `,
-          [classCode.trim()]
-        )
-      ).rows[0];
+              class_code = $1
+              AND is_active = TRUE
+            `,
+            [
+              classCode.trim()
+            ]
+          )
+        ).rows[0];
 
 
       if (!cls) {
 
         return res.status(404).json({
-          error: 'Invalid class code.'
+          error:
+            'Invalid class code.'
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // CHECK EXISTING ENROLLMENT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // EXISTING ENROLLMENT
+      // ------------------------------------------------------
 
-      const existing = (
-        await pool.query(
-          `
+      const existing =
+        (
+          await pool.query(
+            `
             SELECT *
             FROM enrollments
             WHERE
               student_id = $1
               AND class_id = $2
-          `,
-          [
-            req.user.id,
-            cls.id
-          ]
-        )
-      ).rows[0];
+            `,
+            [
+              req.user.id,
+              cls.id
+            ]
+          )
+        ).rows[0];
 
 
       if (
@@ -825,76 +932,84 @@ router.post(
       }
 
 
-      // --------------------------------------------------------
-      // REACTIVATE PREVIOUS ENROLLMENT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // REACTIVATE OLD REJECTED ENROLLMENT
+      // ------------------------------------------------------
 
       if (existing) {
 
         await pool.query(
           `
-            UPDATE enrollments
+          UPDATE enrollments
 
-            SET
-              status = 'pending',
-              enrolled_at = now()
+          SET
+            status = 'pending',
+            enrolled_at = now()
 
-            WHERE id = $1
+          WHERE id = $1
           `,
-          [existing.id]
+          [
+            existing.id
+          ]
         );
 
 
-        await audit(req, {
+        await audit(
+          req,
+          {
+            action:
+              'class_enrollment',
 
-          action: 'class_enrollment',
+            recordType:
+              'enrollment',
 
-          recordType: 'enrollment',
+            recordId:
+              existing.id,
 
-          recordId: existing.id,
+            previousValue:
+              existing.status,
 
-          previousValue: existing.status,
-
-          newValue: 'pending'
-
-        });
+            newValue:
+              'pending'
+          }
+        );
 
 
         return res.status(201).json({
-
           message:
             'Request sent. Your teacher must approve you before you appear in the class.',
 
-          class: cls
-
+          class:
+            cls
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // CREATE NEW ENROLLMENT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // NEW ENROLLMENT
+      // ------------------------------------------------------
 
-      const id = crypto.randomUUID();
+      const id =
+        crypto.randomUUID();
 
 
       await pool.query(
         `
-          INSERT INTO enrollments
-          (
-            id,
-            student_id,
-            class_id,
-            status
-          )
-          VALUES
-          (
-            $1,
-            $2,
-            $3,
-            'pending'
-          )
+        INSERT INTO enrollments
+        (
+          id,
+          student_id,
+          class_id,
+          status
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          'pending'
+        )
         `,
         [
           id,
@@ -904,24 +1019,27 @@ router.post(
       );
 
 
-      // --------------------------------------------------------
-      // AUDIT
-      // --------------------------------------------------------
+      await audit(
+        req,
+        {
+          action:
+            'class_enrollment',
 
-      await audit(req, {
+          recordType:
+            'enrollment',
 
-        action: 'class_enrollment',
+          recordId:
+            id,
 
-        recordType: 'enrollment',
+          newValue: {
+            classId:
+              cls.id,
 
-        recordId: id,
-
-        newValue: {
-          classId: cls.id,
-          status: 'pending'
+            status:
+              'pending'
+          }
         }
-
-      });
+      );
 
 
       res.status(201).json({
@@ -929,7 +1047,8 @@ router.post(
         message:
           'Request sent. Your teacher must approve you before you appear in the class.',
 
-        class: cls
+        class:
+          cls
 
       });
 
@@ -945,9 +1064,8 @@ router.post(
 
 // ============================================================
 // CLASS ROSTER
-// GET /classes/:classId/roster
 //
-// ACTIVE STUDENTS ONLY
+// Active students only.
 // ============================================================
 
 router.get(
@@ -957,10 +1075,12 @@ router.get(
 
     try {
 
-      const { rows } = await pool.query(
-        `
+      const { rows } =
+        await pool.query(
+          `
           SELECT
             s.*,
+
             e.status AS enrollment_status
 
           FROM students s
@@ -975,12 +1095,16 @@ router.get(
           ORDER BY
             s.last_name,
             s.first_name
-        `,
-        [req.params.classId]
+          `,
+          [
+            req.params.classId
+          ]
+        );
+
+
+      res.json(
+        rows
       );
-
-
-      res.json(rows);
 
     } catch (e) {
 
@@ -994,7 +1118,6 @@ router.get(
 
 // ============================================================
 // PENDING ENROLLMENT REQUESTS
-// GET /classes/:classId/pending-enrollments
 // ============================================================
 
 router.get(
@@ -1004,11 +1127,13 @@ router.get(
 
     try {
 
-      const { rows } = await pool.query(
-        `
+      const { rows } =
+        await pool.query(
+          `
           SELECT
             e.id AS enrollment_id,
             e.enrolled_at,
+
             s.*
 
           FROM students s
@@ -1022,12 +1147,16 @@ router.get(
 
           ORDER BY
             e.enrolled_at ASC
-        `,
-        [req.params.classId]
+          `,
+          [
+            req.params.classId
+          ]
+        );
+
+
+      res.json(
+        rows
       );
-
-
-      res.json(rows);
 
     } catch (e) {
 
@@ -1040,8 +1169,7 @@ router.get(
 
 
 // ============================================================
-// APPROVE STUDENT ENROLLMENT
-// POST /classes/:classId/enrollments/:studentId/approve
+// APPROVE ENROLLMENT
 // ============================================================
 
 router.post(
@@ -1051,22 +1179,23 @@ router.post(
 
     try {
 
-      const enrollment = (
-        await pool.query(
-          `
+      const enrollment =
+        (
+          await pool.query(
+            `
             SELECT *
             FROM enrollments
 
             WHERE
               class_id = $1
               AND student_id = $2
-          `,
-          [
-            req.params.classId,
-            req.params.studentId
-          ]
-        )
-      ).rows[0];
+            `,
+            [
+              req.params.classId,
+              req.params.studentId
+            ]
+          )
+        ).rows[0];
 
 
       if (
@@ -1082,41 +1211,44 @@ router.post(
       }
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // ACTIVATE ENROLLMENT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
       await pool.query(
         `
-          UPDATE enrollments
+        UPDATE enrollments
 
-          SET status = 'active'
+        SET
+          status = 'active'
 
-          WHERE id = $1
+        WHERE id = $1
         `,
-        [enrollment.id]
+        [
+          enrollment.id
+        ]
       );
 
 
-      // --------------------------------------------------------
-      // CREATE GRADE STATUS RECORD
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // CREATE INITIAL GRADE STATUS
+      // ------------------------------------------------------
 
       await pool.query(
         `
-          INSERT INTO grade_status
-          (
-            student_id,
-            class_id
-          )
+        INSERT INTO grade_status
+        (
+          student_id,
+          class_id
+        )
 
-          VALUES
-          (
-            $1,
-            $2
-          )
+        VALUES
+        (
+          $1,
+          $2
+        )
 
-          ON CONFLICT DO NOTHING
+        ON CONFLICT DO NOTHING
         `,
         [
           req.params.studentId,
@@ -1125,30 +1257,34 @@ router.post(
       );
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // AUDIT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
-      await audit(req, {
+      await audit(
+        req,
+        {
+          action:
+            'class_enrollment',
 
-        action: 'class_enrollment',
+          recordType:
+            'enrollment',
 
-        recordType: 'enrollment',
+          recordId:
+            enrollment.id,
 
-        recordId: enrollment.id,
+          previousValue:
+            'pending',
 
-        previousValue: 'pending',
-
-        newValue: 'active'
-
-      });
+          newValue:
+            'active'
+        }
+      );
 
 
       res.json({
-
         message:
           'Student approved and added to the class.'
-
       });
 
     } catch (e) {
@@ -1162,8 +1298,7 @@ router.post(
 
 
 // ============================================================
-// REJECT STUDENT ENROLLMENT
-// POST /classes/:classId/enrollments/:studentId/reject
+// REJECT ENROLLMENT
 // ============================================================
 
 router.post(
@@ -1173,22 +1308,23 @@ router.post(
 
     try {
 
-      const enrollment = (
-        await pool.query(
-          `
+      const enrollment =
+        (
+          await pool.query(
+            `
             SELECT *
             FROM enrollments
 
             WHERE
               class_id = $1
               AND student_id = $2
-          `,
-          [
-            req.params.classId,
-            req.params.studentId
-          ]
-        )
-      ).rows[0];
+            `,
+            [
+              req.params.classId,
+              req.params.studentId
+            ]
+          )
+        ).rows[0];
 
 
       if (
@@ -1204,46 +1340,45 @@ router.post(
       }
 
 
-      // --------------------------------------------------------
-      // REJECT ENROLLMENT
-      // --------------------------------------------------------
-
       await pool.query(
         `
-          UPDATE enrollments
+        UPDATE enrollments
 
-          SET status = 'rejected'
+        SET
+          status = 'rejected'
 
-          WHERE id = $1
+        WHERE id = $1
         `,
-        [enrollment.id]
+        [
+          enrollment.id
+        ]
       );
 
 
-      // --------------------------------------------------------
-      // AUDIT
-      // --------------------------------------------------------
+      await audit(
+        req,
+        {
+          action:
+            'class_enrollment',
 
-      await audit(req, {
+          recordType:
+            'enrollment',
 
-        action: 'class_enrollment',
+          recordId:
+            enrollment.id,
 
-        recordType: 'enrollment',
+          previousValue:
+            'pending',
 
-        recordId: enrollment.id,
-
-        previousValue: 'pending',
-
-        newValue: 'rejected'
-
-      });
+          newValue:
+            'rejected'
+        }
+      );
 
 
       res.json({
-
         message:
           'Join request rejected.'
-
       });
 
     } catch (e) {
@@ -1257,8 +1392,7 @@ router.post(
 
 
 // ============================================================
-// GET GRADING WEIGHTS
-// GET /classes/:classId/weights
+// GRADING WEIGHTS — GET
 // ============================================================
 
 router.get(
@@ -1268,16 +1402,19 @@ router.get(
 
     try {
 
-      const w = (
-        await pool.query(
-          `
+      const w =
+        (
+          await pool.query(
+            `
             SELECT *
             FROM grading_weights
             WHERE class_id = $1
-          `,
-          [req.params.classId]
-        )
-      ).rows[0];
+            `,
+            [
+              req.params.classId
+            ]
+          )
+        ).rows[0];
 
 
       res.json(
@@ -1300,8 +1437,7 @@ router.get(
 
 
 // ============================================================
-// UPDATE GRADING WEIGHTS
-// PUT /classes/:classId/weights
+// GRADING WEIGHTS — UPDATE
 // ============================================================
 
 router.put(
@@ -1319,82 +1455,86 @@ router.put(
       } = req.body;
 
 
-      // --------------------------------------------------------
-      // VALIDATE WEIGHTS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // VALIDATE
+      // ------------------------------------------------------
 
-      const check = validateWeights({
-        attendance_weight,
-        quiz_weight,
-        performance_weight,
-        exam_weight
-      });
+      const check =
+        validateWeights({
+          attendance_weight,
+          quiz_weight,
+          performance_weight,
+          exam_weight
+        });
 
 
       if (!check.valid) {
 
         return res.status(400).json({
-          error: check.message
+          error:
+            check.message
         });
 
       }
 
 
-      // --------------------------------------------------------
-      // GET PREVIOUS VALUES
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // PREVIOUS VALUES
+      // ------------------------------------------------------
 
-      const prev = (
-        await pool.query(
-          `
+      const prev =
+        (
+          await pool.query(
+            `
             SELECT *
             FROM grading_weights
             WHERE class_id = $1
-          `,
-          [req.params.classId]
-        )
-      ).rows[0];
+            `,
+            [
+              req.params.classId
+            ]
+          )
+        ).rows[0];
 
 
-      // --------------------------------------------------------
-      // SAVE NEW WEIGHTS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // UPDATE
+      // ------------------------------------------------------
 
       await pool.query(
         `
-          INSERT INTO grading_weights
-          (
-            class_id,
-            attendance_weight,
-            quiz_weight,
-            performance_weight,
-            exam_weight
-          )
+        INSERT INTO grading_weights
+        (
+          class_id,
+          attendance_weight,
+          quiz_weight,
+          performance_weight,
+          exam_weight
+        )
 
-          VALUES
-          (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5
-          )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5
+        )
 
-          ON CONFLICT (class_id)
+        ON CONFLICT (class_id)
+        DO UPDATE SET
 
-          DO UPDATE SET
+          attendance_weight =
+            excluded.attendance_weight,
 
-            attendance_weight =
-              EXCLUDED.attendance_weight,
+          quiz_weight =
+            excluded.quiz_weight,
 
-            quiz_weight =
-              EXCLUDED.quiz_weight,
+          performance_weight =
+            excluded.performance_weight,
 
-            performance_weight =
-              EXCLUDED.performance_weight,
-
-            exam_weight =
-              EXCLUDED.exam_weight
+          exam_weight =
+            excluded.exam_weight
         `,
         [
           req.params.classId,
@@ -1406,35 +1546,38 @@ router.put(
       );
 
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // AUDIT
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
-      await audit(req, {
+      await audit(
+        req,
+        {
+          action:
+            'grading_weights_updated',
 
-        action: 'grading_weights_updated',
+          recordType:
+            'class',
 
-        recordType: 'class',
+          recordId:
+            req.params.classId,
 
-        recordId: req.params.classId,
+          previousValue:
+            prev,
 
-        previousValue: prev,
-
-        newValue: {
-          attendance_weight,
-          quiz_weight,
-          performance_weight,
-          exam_weight
+          newValue: {
+            attendance_weight,
+            quiz_weight,
+            performance_weight,
+            exam_weight
+          }
         }
-
-      });
+      );
 
 
       res.json({
-
         message:
           'Grading weights updated.'
-
       });
 
     } catch (e) {
@@ -1448,7 +1591,7 @@ router.put(
 
 
 // ============================================================
-// EXPORT ROUTER
+// EXPORT
 // ============================================================
 
 module.exports = router;
