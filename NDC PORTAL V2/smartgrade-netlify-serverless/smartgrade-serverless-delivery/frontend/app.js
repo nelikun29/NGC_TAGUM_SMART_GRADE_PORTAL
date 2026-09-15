@@ -253,7 +253,7 @@ function val(id) {
 // APPROVAL NOTIFICATION SYSTEM
 // ============================================================
 
-const ApprovalNotification = {
+const ApprovalManager = {
 
   state: {
 
@@ -838,7 +838,7 @@ const Auth = {
 
       setTimeout(() => {
 
-        ApprovalNotification.forceRefresh();
+        ApprovalManager.forceRefresh();
 
       }, 200);
 
@@ -979,7 +979,7 @@ const Auth = {
     Store.user = null;
 
 
-    ApprovalNotification.refresh();
+    ApprovalManager.refresh();
 
 
     Views.renderForRole();
@@ -1137,7 +1137,7 @@ const Views = {
 
     if (!user) {
 
-      ApprovalNotification.updateBadge(0);
+      ApprovalManager.updateBadge(0);
 
       return;
 
@@ -1256,7 +1256,7 @@ const Views = {
 
     // Refresh notification state after rendering.
 
-    ApprovalNotification.forceRefresh();
+    ApprovalManager.forceRefresh();
 
   }
 
@@ -1274,7 +1274,7 @@ document.addEventListener(
     Views.renderForRole();
 
 
-    ApprovalNotification.init();
+    ApprovalManager.init();
 
 
     // Pull institution name from backend.
@@ -1992,7 +1992,7 @@ const Teacher = {
       Teacher.state.tab
     );
 
-    ApprovalNotification.forceRefresh();
+    ApprovalManager.forceRefresh();
 
   },
 
@@ -2174,7 +2174,7 @@ const Teacher = {
 
     if (tab === 'approvals') {
 
-      ApprovalNotification.forceRefresh();
+      ApprovalManager.forceRefresh();
 
     }
 
@@ -2659,7 +2659,7 @@ const Teacher = {
     // Refresh notification count after loading
     // the actual approval list.
 
-    ApprovalNotification.forceRefresh();
+    ApprovalManager.forceRefresh();
 
   },
 
@@ -2684,7 +2684,7 @@ const Teacher = {
       await Teacher.renderApprovals();
 
 
-      ApprovalNotification.forceRefresh();
+      ApprovalManager.forceRefresh();
 
     } catch {}
 
@@ -2711,7 +2711,7 @@ const Teacher = {
       await Teacher.renderApprovals();
 
 
-      ApprovalNotification.forceRefresh();
+      ApprovalManager.forceRefresh();
 
     } catch {}
 
@@ -4385,7 +4385,7 @@ const Admin = {
       tab === 'approvals'
     ) {
 
-      ApprovalNotification.forceRefresh();
+      ApprovalManager.forceRefresh();
 
     }
 
@@ -4632,16 +4632,16 @@ const Admin = {
 
     // Synchronize notification badge.
 
-    ApprovalNotification.state.adminPending =
+    ApprovalManager.state.adminPending =
       pending;
 
 
-    ApprovalNotification.updateBadge(
+   ApprovalManager.updateBadge(
       pending
     );
 
 
-    ApprovalNotification.updateEnhancedUI();
+    ApprovalManager.updateEnhancedUI();
 
   },
 
@@ -4674,16 +4674,16 @@ const Admin = {
         : 0;
 
 
-    ApprovalNotification.state.adminPending =
+    ApprovalManager.state.adminPending =
       count;
 
 
-    ApprovalNotification.updateBadge(
+    ApprovalManager.updateBadge(
       count
     );
 
 
-    ApprovalNotification.updateEnhancedUI();
+    ApprovalManager.updateEnhancedUI();
 
 
     box.innerHTML = `
@@ -4925,7 +4925,7 @@ const Admin = {
       await Admin.renderApprovals();
 
 
-      ApprovalNotification.forceRefresh();
+      ApprovalManager.forceRefresh();
 
     } catch {}
 
@@ -4952,7 +4952,7 @@ const Admin = {
       await Admin.renderApprovals();
 
 
-      ApprovalNotification.forceRefresh();
+      ApprovalManager.forceRefresh();
 
     } catch {}
 
