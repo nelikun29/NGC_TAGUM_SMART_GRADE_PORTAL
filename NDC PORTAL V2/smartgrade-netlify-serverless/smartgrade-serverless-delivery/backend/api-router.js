@@ -19,7 +19,13 @@ router.use(cors({
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
 }));
 router.use(express.json({ limit: '1mb' }));
-router.use(rateLimit({ windowMs: 60 * 1000, max: 300 }));
+router.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  keyGenerator: (req) => {
+    return req.ip || req.headers['x-forwarded-for'] || 'netlify-client';
+  }
+}));
 
 router.use('/auth', authRoutes);
 router.use('/classes', classRoutes);
