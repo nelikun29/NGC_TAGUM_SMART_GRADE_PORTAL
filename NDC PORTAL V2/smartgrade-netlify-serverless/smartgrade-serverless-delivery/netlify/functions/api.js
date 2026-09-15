@@ -12,12 +12,13 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-// Parse JSON request bodies
 app.use(express.json());
 
-// Mount the API router at root.
-// Netlify handles /api/* → /.netlify/functions/api/*
-// before the request reaches this function.
-app.use('/', apiRouter);
+// Support both:
+// /.netlify/functions/api/*
+// and
+// /api/*
+app.use('/.netlify/functions/api', apiRouter);
+app.use('/api', apiRouter);
 
 exports.handler = serverless(app);
