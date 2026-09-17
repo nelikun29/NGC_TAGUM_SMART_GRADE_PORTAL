@@ -23,6 +23,7 @@
       await loadScript('./teacher-class-card-enhancement.js');
       await loadScript('./gradebook-raw-data.js');
       await loadScript('./gradebook-finalize-all.js');
+      await loadScript('./teacher-student-name-format.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.
       if (typeof Teacher !== 'undefined' && Store?.user?.role === 'teacher') {
         await Teacher.render();
