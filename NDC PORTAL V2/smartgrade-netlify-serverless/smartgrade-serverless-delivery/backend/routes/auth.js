@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { JWT_SECRET, authenticate } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
@@ -12,14 +11,6 @@ const router = express.Router();
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many login attempts. Please try again later.' },
-});
 
 function signToken(user) {
   return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
@@ -111,49 +102,71 @@ router.post('/register/teacher', async (req, res, next) => {
 });
 
 // ---------- LOGIN ----------
-router.post('/login', loginLimiter, async (req, res, next) => {
+// The API already has a Netlify-compatible global request limiter. Login also
+// enforces a persistent per-account 5-attempt/15-minute lockout below, so a
+// second express-rate-limit middleware here is redundant and can fail before
+// the route handler executes in the Netlify serverless request environment.
+router.post('/login', async (req, res, next) => {
+  let stage = 'validate_request';
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!isNonEmptyString(String(email || '')) || !isNonEmptyString(String(password || ''))) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const { rows } = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
+    stage = 'load_user';
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const { rows } = await pool.query(`SELECT * FROM users WHERE lower(email) = $1`, [normalizedEmail]);
     const user = rows[0];
     const genericFail = () => res.status(401).json({ error: 'Invalid email or password.' });
 
     if (!user) return genericFail();
 
+    stage = 'check_lock';
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
       return res.status(423).json({ error: `Account temporarily locked due to repeated failed logins. Try again after ${user.locked_until}.` });
     }
 
-    const ok = bcrypt.compareSync(password, user.password_hash);
+    stage = 'verify_password';
+    if (typeof user.password_hash !== 'string' || !user.password_hash) {
+      console.error('[auth/login] Invalid password hash for user', user.id);
+      return res.status(500).json({ error: 'Unable to complete login. Please contact an administrator.' });
+    }
+    const ok = bcrypt.compareSync(String(password), user.password_hash);
     if (!ok) {
-      const attempts = user.failed_login_attempts + 1;
+      const attempts = Number(user.failed_login_attempts || 0) + 1;
       let lockedUntil = null;
       if (attempts >= MAX_ATTEMPTS) {
         lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString();
       }
+      stage = 'record_failed_login';
       await pool.query(`UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`, [attempts, lockedUntil, user.id]);
       await audit(req, { action: 'login_failed', recordType: 'user', recordId: user.id });
       return genericFail();
     }
 
+    stage = 'check_account_status';
     if (!user.is_active) return res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' });
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
 
+    stage = 'reset_login_state';
     await pool.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
 
+    stage = 'load_profile';
     let profile = null;
-    if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0];
-    if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0];
+    if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
+    if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
 
+    stage = 'sign_token';
     const token = signToken(user);
+    stage = 'audit_success';
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error(`[auth/login] stage=${stage}`, e && e.stack ? e.stack : e);
+    next(e);
+  }
 });
 
 router.post('/logout', authenticate, async (req, res, next) => {

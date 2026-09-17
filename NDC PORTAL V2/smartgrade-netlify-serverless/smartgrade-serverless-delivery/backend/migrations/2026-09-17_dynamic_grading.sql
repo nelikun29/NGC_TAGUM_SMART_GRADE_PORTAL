@@ -1,0 +1,45 @@
+-- Dynamic Grading System v1
+-- NON-DESTRUCTIVE migration. Existing grading_weights and assessment tables remain intact.
+-- Do not run against production until application compatibility is verified.
+BEGIN;
+CREATE TABLE IF NOT EXISTS grading_schemes (
+ id TEXT PRIMARY KEY,class_id TEXT NOT NULL UNIQUE REFERENCES classes(id) ON DELETE CASCADE,
+ name TEXT NOT NULL DEFAULT 'Class Grading Scheme',state TEXT NOT NULL DEFAULT 'draft' CHECK(state IN ('draft','active','finalized')),
+ version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),created_by TEXT NOT NULL REFERENCES users(id),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS grading_components (
+ id TEXT PRIMARY KEY,scheme_id TEXT NOT NULL REFERENCES grading_schemes(id) ON DELETE CASCADE,
+ name TEXT NOT NULL,component_key TEXT NOT NULL,weight NUMERIC(7,4) NOT NULL CHECK(weight>=0 AND weight<=100),
+ source_type TEXT NOT NULL DEFAULT 'custom' CHECK(source_type IN ('attendance','quiz','performance','exam','custom')),
+ calculation_method TEXT NOT NULL DEFAULT 'average_percentage' CHECK(calculation_method IN ('average_percentage','points_total')),
+ -- Fixed denominator for components such as Attendance. Example: 11 present / 15 required days.
+ max_points NUMERIC CHECK(max_points IS NULL OR max_points>0),
+ sort_order INTEGER NOT NULL DEFAULT 0,is_active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(scheme_id,component_key)
+);
+CREATE TABLE IF NOT EXISTS grading_subcomponents (
+ id TEXT PRIMARY KEY,component_id TEXT NOT NULL REFERENCES grading_components(id) ON DELETE CASCADE,
+ name TEXT NOT NULL,subcomponent_key TEXT NOT NULL,weight_share NUMERIC(7,4) NOT NULL CHECK(weight_share>=0 AND weight_share<=100),
+ source_filter TEXT,sort_order INTEGER NOT NULL DEFAULT 0,is_active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(component_id,subcomponent_key)
+);
+CREATE TABLE IF NOT EXISTS custom_assessments (
+ id TEXT PRIMARY KEY,class_id TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+ component_id TEXT NOT NULL REFERENCES grading_components(id) ON DELETE RESTRICT,
+ subcomponent_id TEXT REFERENCES grading_subcomponents(id) ON DELETE SET NULL,title TEXT NOT NULL,description TEXT,
+ assessment_date TEXT,max_score NUMERIC NOT NULL CHECK(max_score>0),is_locked BOOLEAN NOT NULL DEFAULT FALSE,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS custom_assessment_scores (
+ id TEXT PRIMARY KEY,assessment_id TEXT NOT NULL REFERENCES custom_assessments(id) ON DELETE CASCADE,
+ student_id TEXT NOT NULL REFERENCES students(id),raw_score NUMERIC CHECK(raw_score IS NULL OR raw_score>=0),remarks TEXT,
+ verification_status TEXT NOT NULL DEFAULT 'verified' CHECK(verification_status IN ('pending','verified','rejected')),
+ is_locked BOOLEAN NOT NULL DEFAULT FALSE,updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(assessment_id,student_id)
+);
+CREATE INDEX IF NOT EXISTS idx_grading_components_scheme ON grading_components(scheme_id);
+CREATE INDEX IF NOT EXISTS idx_grading_subcomponents_component ON grading_subcomponents(component_id);
+CREATE INDEX IF NOT EXISTS idx_custom_assessments_class ON custom_assessments(class_id);
+CREATE INDEX IF NOT EXISTS idx_custom_scores_assessment ON custom_assessment_scores(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_custom_scores_student ON custom_assessment_scores(student_id);
+COMMIT;
