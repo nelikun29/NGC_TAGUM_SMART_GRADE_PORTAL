@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { pool } = require('../db');
 const {
   authenticate,
@@ -6,7 +7,7 @@ const {
   requireClassOwnership
 } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
-const { computeClassGrade } = require('../utils/grading');
+const { computeClassGrade, buildAdjustmentContext, computeAdjustmentDelta } = require('../utils/grading');
 
 const router = express.Router();
 
@@ -571,5 +572,128 @@ router.post(
   }
 );
 
+
+// ============================================================
+// GRADE ADJUSTMENTS (manual teacher override, additive layer)
+//
+// Exactly one adjustment can exist per (student, class, component).
+// Stored as a percentage-point delta (see utils/grading.js for why) but
+// the API here works in the friendly "current total / max possible" terms
+// the Teacher Dashboard shows, so the frontend never has to do this math.
+// ============================================================
+
+const VALID_COMPONENTS = ['attendance', 'quiz', 'performance', 'exam'];
+
+async function assertEnrolled(studentId, classId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM enrollments WHERE student_id = $1 AND class_id = $2 AND status = 'active'`,
+    [studentId, classId]
+  );
+  return !!rows[0];
+}
+
+// ---------- GET current adjustment context for ALL components (populates the edit UI) ----------
+router.get('/:classId/students/:studentId/adjustments', requireRole('teacher', 'admin'), requireClassOwnership, async (req, res, next) => {
+  try {
+    const { classId, studentId } = req.params;
+    if (!(await assertEnrolled(studentId, classId))) {
+      return res.status(404).json({ error: 'Student is not actively enrolled in this class.' });
+    }
+
+    const { rows: existing } = await pool.query(
+      `SELECT * FROM grade_adjustments WHERE student_id = $1 AND class_id = $2`,
+      [studentId, classId]
+    );
+    const byComponent = {};
+    for (const r of existing) byComponent[r.component] = r;
+
+    const result = {};
+    for (const component of VALID_COMPONENTS) {
+      const ctx = await buildAdjustmentContext(studentId, classId, component);
+      const existingAdj = byComponent[component];
+      result[component] = ctx.error
+        ? { available: false, message: ctx.error }
+        : {
+            available: true,
+            recordedTotal: ctx.recordedTotal,
+            max: ctx.max,
+            label: ctx.label,
+            currentAdjustmentPoints: existingAdj ? Number(existingAdj.adjustment_points) : 0,
+            // The total the teacher currently sees on screen, recorded + any existing adjustment,
+            // expressed back in raw "X / Y" terms rather than percentage points.
+            currentTotal: existingAdj
+              ? Math.round((ctx.recordedTotal + (Number(existingAdj.adjustment_points) / 100) * ctx.max) * 100) / 100
+              : ctx.recordedTotal,
+          };
+    }
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+// ---------- SET/UPDATE an adjustment for one component ----------
+router.put('/:classId/students/:studentId/adjustments/:component', requireRole('teacher', 'admin'), requireClassOwnership, async (req, res, next) => {
+  try {
+    const { classId, studentId, component } = req.params;
+    if (!VALID_COMPONENTS.includes(component)) {
+      return res.status(400).json({ error: 'Invalid component.' });
+    }
+    if (!(await assertEnrolled(studentId, classId))) {
+      return res.status(404).json({ error: 'Student is not actively enrolled in this class.' });
+    }
+
+    const { newTotal, reason } = req.body;
+    const check = await computeAdjustmentDelta(studentId, classId, component, Number(newTotal));
+    if (!check.valid) return res.status(400).json({ error: check.message });
+
+    const prev = (await pool.query(
+      `SELECT * FROM grade_adjustments WHERE student_id = $1 AND class_id = $2 AND component = $3`,
+      [studentId, classId, component]
+    )).rows[0];
+
+    await pool.query(`
+      INSERT INTO grade_adjustments (id, student_id, class_id, component, adjustment_points, reason, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
+      ON CONFLICT (student_id, class_id, component) DO UPDATE SET
+        adjustment_points = excluded.adjustment_points,
+        reason = excluded.reason,
+        created_by = excluded.created_by,
+        updated_at = now()
+    `, [crypto.randomUUID(), studentId, classId, component, check.deltaPercent, reason || null, req.user.id]);
+
+    await audit(req, {
+      action: 'manual_total_adjustment',
+      recordType: `grade_adjustment_${component}`,
+      recordId: `${studentId}:${classId}`,
+      previousValue: prev ? { total: check.recordedTotal + (Number(prev.adjustment_points) / 100) * check.max, max: check.max } : { total: check.recordedTotal, max: check.max },
+      newValue: { total: check.newTotal, max: check.max, adjustmentPoints: Math.round((check.newTotal - check.recordedTotal) * 100) / 100, reason: reason || null },
+    });
+
+    res.json({ message: `${component[0].toUpperCase() + component.slice(1)} total adjusted to ${check.newTotal} / ${check.max}.` });
+  } catch (e) { next(e); }
+});
+
+// ---------- REMOVE an adjustment (revert to the original computed total) ----------
+router.delete('/:classId/students/:studentId/adjustments/:component', requireRole('teacher', 'admin'), requireClassOwnership, async (req, res, next) => {
+  try {
+    const { classId, studentId, component } = req.params;
+    if (!VALID_COMPONENTS.includes(component)) return res.status(400).json({ error: 'Invalid component.' });
+
+    const prev = (await pool.query(
+      `DELETE FROM grade_adjustments WHERE student_id = $1 AND class_id = $2 AND component = $3 RETURNING *`,
+      [studentId, classId, component]
+    )).rows[0];
+    if (!prev) return res.status(404).json({ error: 'No adjustment exists for this component.' });
+
+    await audit(req, {
+      action: 'manual_total_adjustment_removed',
+      recordType: `grade_adjustment_${component}`,
+      recordId: `${studentId}:${classId}`,
+      previousValue: { adjustmentPoints: Number(prev.adjustment_points) },
+      newValue: null,
+    });
+
+    res.json({ message: `${component[0].toUpperCase() + component.slice(1)} adjustment removed — reverted to the original computed total.` });
+  } catch (e) { next(e); }
+});
 
 module.exports = router;
