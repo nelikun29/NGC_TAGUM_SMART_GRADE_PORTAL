@@ -1,0 +1,13 @@
+const express=require('express');
+const {pool}=require('../db');
+const {authenticate,requireRole}=require('../middleware/auth');
+const {audit}=require('../utils/audit');
+const router=express.Router();router.use(authenticate,requireRole('teacher','admin'));
+async function owned(req,res,classId){if(req.user.role==='admin')return true;const c=(await pool.query('SELECT teacher_id FROM classes WHERE id=$1',[classId])).rows[0];if(!c||c.teacher_id!==req.user.id){res.status(403).json({error:'You are not authorized to modify this class.'});return false;}return true;}
+async function finalized(classId){return (await pool.query(`SELECT EXISTS(SELECT 1 FROM grade_status WHERE class_id=$1 AND status IN ('finalized','released')) locked`,[classId])).rows[0].locked;}
+async function safeAudit(req,data){try{await audit(req,data);}catch(e){console.error('Audit logging failed:',e);}}
+async function remove(req,res,next,{table,scoreTable,idColumn,param,label}){const client=await pool.connect();try{const id=req.params[param];const item=(await client.query(`SELECT * FROM ${table} WHERE id=$1`,[id])).rows[0];if(!item)return res.status(404).json({error:`${label} not found.`});if(!await owned(req,res,item.class_id))return;if(await finalized(item.class_id))return res.status(409).json({error:`${label} cannot be deleted because this class has finalized or released grades.`});if(item.is_locked&&req.user.role!=='admin')return res.status(409).json({error:`${label} is locked and cannot be deleted by a teacher.`});await client.query('BEGIN');const count=(await client.query(`SELECT COUNT(*)::int count FROM ${scoreTable} WHERE ${idColumn}=$1`,[id])).rows[0].count;await client.query(`DELETE FROM ${scoreTable} WHERE ${idColumn}=$1`,[id]);await client.query(`DELETE FROM ${table} WHERE id=$1`,[id]);await client.query('COMMIT');await safeAudit(req,{action:'assessment_deletion',recordType:table,recordId:id,previousValue:{title:item.title,deletedScores:count,classId:item.class_id}});res.json({message:`${label} deleted.`,deletedScores:count});}catch(e){try{await client.query('ROLLBACK');}catch{}next(e);}finally{client.release();}}
+router.delete('/quizzes/:quizId',(req,res,next)=>remove(req,res,next,{table:'quizzes',scoreTable:'quiz_scores',idColumn:'quiz_id',param:'quizId',label:'Quiz'}));
+router.delete('/performance-tasks/:taskId',(req,res,next)=>remove(req,res,next,{table:'performance_tasks',scoreTable:'performance_scores',idColumn:'task_id',param:'taskId',label:'Performance task'}));
+router.delete('/exams/:examId',(req,res,next)=>remove(req,res,next,{table:'examinations',scoreTable:'exam_scores',idColumn:'exam_id',param:'examId',label:'Examination'}));
+module.exports=router;
