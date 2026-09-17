@@ -1,0 +1,56 @@
+// Teacher grading controls. Loaded after app.js/teacher enhancements and before dynamic-grading-ui.js.
+(() => {
+  if (typeof Teacher === 'undefined') return;
+  const e = v => typeof esc === 'function' ? esc(v) : String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pctText = v => Number.isFinite(Number(v)) ? `${Math.round(Number(v)*100)/100}%` : '—';
+  const endpointFor = kind => kind==='quizzes'?'/assessments/quizzes':kind==='performance'?'/assessments/performance-tasks':'/assessments/exams';
+  const maxOf = (item,kind) => Number(kind==='quizzes' ? item.total_items : item.max_score);
+
+  Teacher.assessmentCard = function(item, kind) {
+    const maximum=maxOf(item,kind); const locked=!!item.is_locked;
+    return `<div class="glass-card rounded-2xl p-4" data-assessment-id="${e(item.id)}">
+      <div class="flex items-start justify-between gap-3"><div><h5 class="font-black">${e(item.title||item.name||'Assessment')}</h5><p class="text-xs text-slate-500 mt-1">Maximum Score: <b>${Number.isFinite(maximum)?e(maximum):'—'}</b>${item.exam_type?` &middot; ${e(item.exam_type)}`:''}</p></div><span class="text-[10px] uppercase font-bold px-2 py-1 rounded-full ${locked?'bg-slate-100 text-slate-500':'bg-emerald-100 text-emerald-700'}">${locked?'Locked':'Open'}</span></div>
+      <div class="flex flex-wrap gap-2 mt-4"><button onclick="Teacher.showScoreEntry('${kind}','${e(item.id)}')" ${locked?'disabled':''} class="bg-eduBlue-600 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-xs font-bold">Enter Scores</button><button onclick="Teacher.lockAssessment('${kind}','${e(item.id)}')" ${locked?'disabled':''} class="bg-slate-100 disabled:opacity-40 text-slate-700 px-3 py-2 rounded-lg text-xs font-bold">${locked?'Locked':'Lock'}</button><button onclick="Teacher.deleteAssessment('${kind}','${e(item.id)}','${e(item.title||'Assessment')}')" ${locked?'disabled':''} class="bg-red-50 disabled:opacity-40 text-red-700 border border-red-200 px-3 py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-trash-can mr-1"></i>Delete</button></div>
+    </div>`;
+  };
+
+  Teacher.deleteAssessment = async function(kind,id,title){
+    if(!confirm(`Delete ${title}?\n\nAll learner scores recorded for this assessment will also be removed. This cannot be undone.`))return;
+    try{const data=await api('DELETE',`${endpointFor(kind)}/${id}`);Toast.show('Assessment Deleted',data.message||'Assessment deleted.','success');await Teacher.renderAssessment(kind);}catch{}
+  };
+
+  const originalShowScoreEntry=Teacher.showScoreEntry.bind(Teacher);
+  Teacher.showScoreEntry=async function(kind,itemId){
+    const rows=await api('GET',`${endpointFor(kind)}?classId=${encodeURIComponent(Teacher.state.classId)}`).catch(()=>[]);
+    const item=Array.isArray(rows)?rows.find(x=>String(x.id)===String(itemId)):null;
+    const maximum=item?maxOf(item,kind):NaN;
+    await originalShowScoreEntry(kind,itemId);
+    const box=document.getElementById('teacher-tab-content');
+    if(!box||!Number.isFinite(maximum))return;
+    const heading=box.querySelector('h4');if(heading)heading.insertAdjacentHTML('afterend',`<p class="text-xs text-slate-500 mb-4">Allowed score range: <b>0–${e(maximum)}</b>. Scores above ${e(maximum)} are rejected.</p>`);
+    box.querySelectorAll(`input[id^="score-${CSS.escape(String(itemId))}-"]`).forEach(input=>{input.min='0';input.max=String(maximum);input.dataset.sgMax=String(maximum);input.placeholder=`0 - ${maximum}`;});
+  };
+
+  const originalSaveScore=Teacher.saveScore.bind(Teacher);
+  Teacher.saveScore=async function(kind,itemId,studentId){
+    const input=document.getElementById(`score-${itemId}-${studentId}`);if(!input)return;
+    const score=Number(input.value), maximum=Number(input.dataset.sgMax);
+    if(!Number.isFinite(score)){Toast.show('Invalid Score','Please enter a valid numeric score.','error');return;}
+    if(score<0){Toast.show('Invalid Score','Score cannot be negative.','error');input.focus();return;}
+    if(Number.isFinite(maximum)&&score>maximum){Toast.show('Score Rejected',`Score cannot exceed the maximum score of ${maximum}.`,'error');input.focus();input.select();return;}
+    return originalSaveScore(kind,itemId,studentId);
+  };
+
+  Teacher.downloadFinalGrades=async function(){
+    const cid=Teacher.state.classId;if(!cid)return;
+    try{const res=await fetch(`${API_BASE}/grade-export/${encodeURIComponent(cid)}/final-grades.xlsx`,{headers:{Authorization:`Bearer ${Store.token}`}});if(!res.ok){let msg='Unable to generate Excel file.';try{const j=await res.json();msg=j.error||msg;}catch{}throw new Error(msg);}const blob=await res.blob();const cd=res.headers.get('content-disposition')||'';const match=cd.match(/filename="?([^";]+)"?/i);const name=match?.[1]||'Final-Grades.xlsx';const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);Toast.show('Excel Ready','Final grades downloaded successfully.','success');}catch(err){Toast.show('Download Failed',err.message||'Unable to download final grades.','error');}
+  };
+
+  Teacher.renderGradebook=async function(){
+    const box=document.getElementById('teacher-tab-content'),cid=Teacher.state.classId;if(!box||!cid)return;
+    const rows=await api('GET',`/grades/${cid}`).catch(()=>[]);const order=[];const names={};for(const r of rows||[])for(const key of (r.componentOrder||Object.keys(r.components||{}))){if(!order.includes(key))order.push(key);names[key]=r.components?.[key]?.name||key;}
+    if(!order.length)order.push('attendance','quiz','performance','exam');
+    const actions=r=>r.status==='released'?'<span class="text-[10px] font-bold text-emerald-600"><i class="fa-solid fa-check"></i> Released</span>':r.status==='finalized'?`<button onclick="Teacher.releaseGrade('${e(r.studentId)}')" class="text-[11px] font-bold text-eduBlue-600 hover:underline">Release</button>`:`<button onclick="Teacher.finalizeGrade('${e(r.studentId)}')" class="text-[11px] font-bold text-slate-600 hover:underline">Finalize</button>`;
+    box.innerHTML=`<div class="space-y-4"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h4 class="font-black text-slate-800">Gradebook</h4><p class="text-xs text-slate-500 mt-1">Columns follow the active grading system for this class.</p></div><div class="flex flex-col sm:flex-row gap-2"><input id="teacher-grade-filter" type="search" placeholder="Search student..." oninput="Teacher.filterGradebook()" class="w-full sm:w-56 px-3 py-2 rounded-xl border border-slate-300 text-sm"><button type="button" onclick="Teacher.downloadFinalGrades()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap"><i class="fa-solid fa-file-excel mr-1"></i> Download Final Grades (.xlsx)</button></div></div><div class="glass-card rounded-2xl overflow-x-auto"><table id="teacher-grade-table" class="gradebook w-full text-left"><thead class="text-xs uppercase text-slate-500 border-b"><tr><th>Student</th>${order.map(k=>`<th>${e(names[k]||k)}</th>`).join('')}<th>Final</th><th>Status</th><th>Actions</th></tr></thead><tbody>${(rows||[]).map(r=>`<tr class="border-b hover:bg-slate-50"><td class="font-semibold">${e(r.studentName||'—')}</td>${order.map(k=>`<td>${pctText(r.components?.[k]?.percent ?? r[k])}</td>`).join('')}<td class="font-black">${e(r.finalGrade??'—')}</td><td><span class="text-xs font-bold ${r.status==='released'?'text-emerald-600':'text-amber-600'}">${e(r.status||'—')}</span></td><td>${actions(r)}</td></tr>`).join('')}</tbody></table></div></div>`;
+  };
+})();
