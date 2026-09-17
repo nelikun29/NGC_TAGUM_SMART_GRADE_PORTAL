@@ -31,7 +31,14 @@
         totalItems
       });
       Toast.show('Quiz Created', `Quiz created with a maximum score of ${totalItems}.`, 'success');
-      await Teacher.renderAssessmentTab('quizzes');
+
+      // Refresh the authoritative Quiz tab immediately. The old compatibility
+      // shim called renderAssessmentTab(), which is not part of the current
+      // Teacher dashboard API, so the newly-created quiz was only visible
+      // after a full browser refresh.
+      if (typeof Teacher.renderAssessment === 'function') {
+        await Teacher.renderAssessment('quizzes');
+      }
     } catch {
       // api() already displays the server error.
     }
