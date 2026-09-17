@@ -19,10 +19,14 @@
       await loadScript('./admin-role-correction.js');
       await loadScript('./quiz-create-fix.js');
       await loadScript('./reference-dashboard-theme.js');
+      await loadScript('./student-class-card-enhancement.js');
       await loadScript('./gradebook-raw-data.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.
       if (typeof Teacher !== 'undefined' && Teacher.state?.classId && Store?.user?.role === 'teacher') {
         Teacher.switchTab(Teacher.state.tab || 'gradebook');
+      }
+      if (typeof Student !== 'undefined' && Store?.user?.role === 'student') {
+        await Student.render();
       }
       if (typeof Admin !== 'undefined' && Store?.user?.role === 'admin' && Admin.tab === 'users') {
         Admin.renderUsers();
