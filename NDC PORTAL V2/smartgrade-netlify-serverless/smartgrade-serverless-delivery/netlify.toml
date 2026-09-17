@@ -2,6 +2,12 @@
   publish = "frontend"
   functions = "netlify/functions"
 
+# Deploy Previews are used as the controlled staging environment for pull
+# requests. Force Netlify to build these previews instead of cancelling them
+# through automatic content-change detection.
+[context.deploy-preview]
+  ignore = "exit 1"
+
 # Routes /api/* to the Express app running as a Netlify Function, so the
 # frontend and backend share one origin — no CORS configuration needed in
 # production.
