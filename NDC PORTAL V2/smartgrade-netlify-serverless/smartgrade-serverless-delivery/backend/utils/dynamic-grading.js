@@ -56,8 +56,6 @@ async function componentResult(studentId,classId,c){
     let pct=0,earned=0,max=0,hasContributingSubcomponent=false;
     for(const sub of c.subcomponents){
       const share=Number(sub.weight_share);
-      // A zero-weight period (for example Prelim = 0%) contributes nothing to
-      // the component and must never make Midterm/Final grades incomplete.
       if(!Number.isFinite(share)||share<=0)continue;
       hasContributingSubcomponent=true;
       let rows;if(c.source_type==='custom')rows=(await pool.query(`SELECT s.raw_score,a.max_score,s.verification_status FROM custom_assessments a LEFT JOIN custom_assessment_scores s ON s.assessment_id=a.id AND s.student_id=$4 WHERE a.class_id=$1 AND a.component_id=$2 AND a.subcomponent_id=$3`,[classId,c.id,sub.id,studentId])).rows;else rows=await assessmentRows(studentId,classId,c.source_type,sub.source_filter||sub.name);
@@ -69,7 +67,7 @@ async function componentResult(studentId,classId,c){
     return {percent:pct,complete:true,earned:max?earned:undefined,max:max||undefined};
   }
   const rows=c.source_type==='custom'?await assessmentRows(studentId,classId,'custom',{componentId:c.id}):await assessmentRows(studentId,classId,c.source_type);
-  const fixed=['quiz','performance'].includes(c.source_type)?c.max_points:null;
+  const fixed=['quiz','performance','custom'].includes(c.source_type)?c.max_points:null;
   return summarize(rows,c.calculation_method,fixed);
 }
 
