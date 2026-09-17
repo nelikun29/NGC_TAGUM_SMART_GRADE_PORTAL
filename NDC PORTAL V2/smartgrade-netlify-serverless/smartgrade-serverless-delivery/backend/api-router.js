@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const classRoutes = require('./routes/classes');
 const attendanceRoutes = require('./routes/attendance');
 const assessmentRoutes = require('./routes/assessments');
+const assessmentManagementRoutes = require('./routes/assessment-management');
 const gradeRoutes = require('./routes/grades');
 const adminRoutes = require('./routes/admin');
 const reportRoutes = require('./routes/reports');
@@ -15,37 +16,21 @@ const classManagementRoutes = require('./routes/class-management');
 const gradingSchemeRoutes = require('./routes/grading-schemes');
 
 const router = express.Router();
-
 router.use(helmet());
-router.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-}));
-router.use(express.json({ limit: '1mb' }));
-router.use(rateLimit({
-  windowMs: 60 * 1000,
-  max: 300,
-  keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || 'netlify-client'
-}));
-
-router.use('/auth', authRoutes);
-router.use('/classes', classRoutes);
-router.use('/attendance', attendanceRoutes);
-router.use('/assessments', assessmentRoutes);
-router.use('/grades', gradeRoutes);
-router.use('/admin', adminRoutes);
-router.use('/reports', reportRoutes);
-router.use('/grading-schemes', gradingSchemeRoutes);
-// Preserve the original public paths /classes/* and /attendance/*.
-router.use('/', classManagementRoutes);
-
-router.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-router.get('/config', (req, res) => {
-  res.json({ institutionName: process.env.INSTITUTION_NAME || 'Smart Grade & Attendance Portal' });
-});
-
-router.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: 'An unexpected server error occurred.' });
-});
-
-module.exports = router;
+router.use(cors({origin:process.env.CORS_ORIGIN?process.env.CORS_ORIGIN.split(','):'*'}));
+router.use(express.json({limit:'1mb'}));
+router.use(rateLimit({windowMs:60*1000,max:300,keyGenerator:req=>req.ip||req.headers['x-forwarded-for']||'netlify-client'}));
+router.use('/auth',authRoutes);
+router.use('/classes',classRoutes);
+router.use('/attendance',attendanceRoutes);
+router.use('/assessments',assessmentRoutes);
+router.use('/assessments',assessmentManagementRoutes);
+router.use('/grades',gradeRoutes);
+router.use('/admin',adminRoutes);
+router.use('/reports',reportRoutes);
+router.use('/grading-schemes',gradingSchemeRoutes);
+router.use('/',classManagementRoutes);
+router.get('/health',(req,res)=>res.json({status:'ok',time:new Date().toISOString()}));
+router.get('/config',(req,res)=>res.json({institutionName:process.env.INSTITUTION_NAME||'Smart Grade & Attendance Portal'}));
+router.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'An unexpected server error occurred.'});});
+module.exports=router;
