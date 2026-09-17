@@ -4277,6 +4277,7 @@ const Teacher = {
                 <th>Exam</th>
                 <th>Final</th>
                 <th>Status</th>
+                <th>Actions</th>
 
               </tr>
 
@@ -4311,6 +4312,18 @@ const Teacher = {
 
   gradebookRow(r) {
 
+    const adjustBtn = (component) => `
+      <button
+        onclick="Teacher.openAdjustmentModal('${esc(r.studentId)}', '${component}')"
+        title="Edit ${component} total"
+        class="ml-1
+               text-slate-400
+               hover:text-eduBlue-600"
+      >
+        <i class="fa-solid fa-pen text-[10px]"></i>
+      </button>
+    `;
+
     return `
 
       <tr
@@ -4340,30 +4353,22 @@ const Teacher = {
 
 
         <td>
-          ${esc(
-            r.attendance ?? '—'
-          )}
+          ${esc(r.attendance ?? '—')}${adjustBtn('attendance')}
         </td>
 
 
         <td>
-          ${esc(
-            r.quiz ?? '—'
-          )}
+          ${esc(r.quiz ?? '—')}${adjustBtn('quiz')}
         </td>
 
 
         <td>
-          ${esc(
-            r.performance ?? '—'
-          )}
+          ${esc(r.performance ?? '—')}${adjustBtn('performance')}
         </td>
 
 
         <td>
-          ${esc(
-            r.exam ?? '—'
-          )}
+          ${esc(r.exam ?? '—')}${adjustBtn('exam')}
         </td>
 
 
@@ -4402,10 +4407,146 @@ const Teacher = {
 
         </td>
 
+        <td>
+          ${
+            r.status === 'released'
+              ? `<span class="text-[10px] font-bold text-emerald-600"><i class="fa-solid fa-check"></i> Released</span>`
+              : r.status === 'finalized'
+                ? `<button onclick="Teacher.releaseGrade('${esc(r.studentId)}')" class="text-[11px] font-bold text-eduBlue-600 hover:underline">Release</button>`
+                : `<button onclick="Teacher.finalizeGrade('${esc(r.studentId)}')" class="text-[11px] font-bold text-slate-600 hover:underline">Finalize</button>`
+          }
+        </td>
+
       </tr>
 
     `;
 
+  },
+
+
+  // ==========================================================
+  // GRADE COMPONENT ADJUSTMENTS (manual total override)
+  //
+  // Backed by:
+  //   GET    /grades/:classId/students/:studentId/adjustments
+  //   PUT    /grades/:classId/students/:studentId/adjustments/:component
+  //   DELETE /grades/:classId/students/:studentId/adjustments/:component
+  //
+  // The server always validates the new total against that component's
+  // actual maximum (total attendance sessions, or sum of quiz/performance/
+  // exam max scores) and never lets an adjustment exceed it or go negative.
+  // Original attendance/quiz/performance/exam records are never touched —
+  // this only affects the percentage that feeds into the final grade.
+  // ==========================================================
+
+  closeAdjustmentModal() {
+    const modal = document.getElementById('teacher-adjustment-modal');
+    if (modal) modal.remove();
+  },
+
+  async openAdjustmentModal(studentId, component) {
+    const cid = Teacher.state.classId;
+    const all = await api('GET', `/grades/${cid}/students/${studentId}/adjustments`).catch(() => null);
+    if (!all) return;
+
+    const ctx = all[component];
+    const existing = document.getElementById('teacher-adjustment-modal');
+    if (existing) existing.remove();
+
+    const label = component[0].toUpperCase() + component.slice(1);
+
+    const bodyHtml = !ctx || !ctx.available
+      ? `<p class="text-sm text-slate-500 py-4">${esc((ctx && ctx.message) || 'No data available for this component yet.')}</p>`
+      : `
+        <p class="text-xs text-slate-500 mb-3">
+          Current total (from recorded ${ctx.label}${ctx.currentAdjustmentPoints ? ', including an existing adjustment' : ''}):
+          <span class="font-black text-slate-800">${ctx.currentTotal} / ${ctx.max}</span>
+        </p>
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">New Total (out of ${ctx.max})</label>
+        <input id="adj-new-total" type="number" step="any" min="0" max="${ctx.max}" value="${ctx.currentTotal}"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm mb-3">
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Reason (optional)</label>
+        <input id="adj-reason" type="text" placeholder="e.g. Excused absence reviewed after the fact"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+      `;
+
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="teacher-adjustment-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="Teacher.closeAdjustmentModal()"></div>
+        <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div class="px-5 py-4 bg-slate-800 text-white flex items-center justify-between gap-3">
+            <div>
+              <h3 class="font-black text-lg">Edit ${label} Total</h3>
+              <p class="text-xs text-white/70 mt-1">Adjusts the overall ${component} grade component for this student.</p>
+            </div>
+            <button type="button" onclick="Teacher.closeAdjustmentModal()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div class="p-5">
+            ${bodyHtml}
+          </div>
+          <div class="px-5 py-4 bg-slate-50 border-t flex items-center justify-between gap-2">
+            ${ctx && ctx.available && ctx.currentAdjustmentPoints ? `
+              <button onclick="Teacher.removeAdjustment('${esc(studentId)}', '${component}')" class="text-xs font-bold text-red-600">
+                Remove Adjustment
+              </button>` : `<span></span>`}
+            <div class="flex gap-2">
+              <button onclick="Teacher.closeAdjustmentModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
+              ${ctx && ctx.available ? `
+                <button onclick="Teacher.saveAdjustment('${esc(studentId)}', '${component}')" class="px-4 py-2 rounded-xl text-sm font-bold bg-eduBlue-600 text-white">Save Adjustment</button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+  },
+
+  async saveAdjustment(studentId, component) {
+    const input = document.getElementById('adj-new-total');
+    if (!input) return;
+    const newTotal = parseFloat(input.value);
+    if (Number.isNaN(newTotal)) {
+      Toast.show('Invalid Total', 'Please enter a valid number.', 'error');
+      return;
+    }
+    const reason = (document.getElementById('adj-reason') || {}).value || '';
+    const cid = Teacher.state.classId;
+    try {
+      const result = await api('PUT', `/grades/${cid}/students/${studentId}/adjustments/${component}`, { newTotal, reason });
+      Toast.show('Adjusted', result.message || 'Total adjusted.', 'success');
+      Teacher.closeAdjustmentModal();
+      Teacher.renderGradebook();
+    } catch {}
+  },
+
+  async removeAdjustment(studentId, component) {
+    const cid = Teacher.state.classId;
+    try {
+      const result = await api('DELETE', `/grades/${cid}/students/${studentId}/adjustments/${component}`);
+      Toast.show('Reverted', result.message || 'Adjustment removed.', 'success');
+      Teacher.closeAdjustmentModal();
+      Teacher.renderGradebook();
+    } catch {}
+  },
+
+  async finalizeGrade(studentId) {
+    const cid = Teacher.state.classId;
+    try {
+      const result = await api('POST', `/grades/${cid}/students/${studentId}/finalize`);
+      Toast.show('Finalized', result.message || 'Grade finalized.', 'success');
+      Teacher.renderGradebook();
+    } catch {}
+  },
+
+  async releaseGrade(studentId) {
+    const cid = Teacher.state.classId;
+    try {
+      const result = await api('POST', `/grades/${cid}/students/${studentId}/release`);
+      Toast.show('Released', result.message || 'Grade released to student.', 'success');
+      Teacher.renderGradebook();
+    } catch {}
   },
 
 
@@ -4996,16 +5137,27 @@ const Teacher = {
 
     if (!box) return;
 
+    box.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Loading roster…</div>`;
 
-    const rows =
+    const data =
       await api(
         'GET',
-        `/attendance/sessions/${sessionId}`
+        `/attendance/sessions/${sessionId}/roster`
       ).catch(() => null);
 
 
-    if (!rows) return;
+    if (!data) return;
 
+    const { session, roster } = data;
+
+    const statusBtn = (studentId, status, current) => {
+      const active = current === status;
+      const colors = { present: 'emerald', late: 'amber', absent: 'red', excused: 'slate' };
+      const c = colors[status];
+      return `<button onclick="Teacher.setAttendanceStatus('${esc(sessionId)}', '${esc(studentId)}', '${status}')"
+        class="px-2 py-1 rounded-lg text-[11px] font-bold border ${active ? `bg-${c}-600 text-white border-${c}-600` : `bg-white text-${c}-700 border-${c}-300 hover:bg-${c}-50`}">
+        ${status[0].toUpperCase() + status.slice(1)}</button>`;
+    };
 
     box.innerHTML = `
 
@@ -5031,22 +5183,55 @@ const Teacher = {
 
         </button>
 
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h4 class="font-black">${esc(session.session_date)}</h4>
+            <p class="text-xs text-slate-500">
+              Status: ${esc(session.status)}
+              ${session.status === 'open' ? ` &middot; Code: <span class="font-mono font-bold">${esc(session.attendance_code)}</span>` : ''}
+            </p>
+          </div>
+          ${session.status === 'open' ? `
+            <button onclick="Teacher.closeAttendanceSession('${esc(sessionId)}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+              <i class="fa-solid fa-stop mr-1"></i> Close Session
+            </button>` : ''}
+        </div>
 
-        <pre
-          class="text-xs
-                 whitespace-pre-wrap"
-        >${esc(
-          JSON.stringify(
-            rows,
-            null,
-            2
-          )
-        )}</pre>
+        <div class="space-y-2">
+          ${
+            Array.isArray(roster) && roster.length
+              ? roster.map(s => `
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b py-3">
+                  <span class="font-semibold text-sm">${esc(s.last_name)}, ${esc(s.first_name)} <span class="text-slate-400 text-xs">(${esc(s.student_number)})</span></span>
+                  <div class="flex gap-1">
+                    ${['present', 'late', 'absent', 'excused'].map(st => statusBtn(s.id, st, s.status)).join('')}
+                  </div>
+                </div>
+              `).join('')
+              : `<p class="text-sm text-slate-500 italic py-4">No active students enrolled in this class yet.</p>`
+          }
+        </div>
 
       </div>
 
     `;
 
+  },
+
+  async setAttendanceStatus(sessionId, studentId, status) {
+    try {
+      await api('PUT', `/attendance/sessions/${sessionId}/records/${studentId}`, { status });
+      Toast.show('Saved', `Marked ${status}.`, 'success');
+      Teacher.openSession(sessionId);
+    } catch {}
+  },
+
+  async closeAttendanceSession(sessionId) {
+    try {
+      await api('POST', `/attendance/sessions/${sessionId}/close`);
+      Toast.show('Closed', 'Attendance session closed.', 'success');
+      Teacher.openSession(sessionId);
+    } catch {}
   },
 
 
@@ -5076,10 +5261,10 @@ const Teacher = {
 
     const endpoint =
       kind === 'quizzes'
-        ? `/assessments/classes/${cid}/quizzes`
+        ? `/assessments/quizzes?classId=${encodeURIComponent(cid)}`
         : kind === 'performance'
-          ? `/assessments/classes/${cid}/performance-tasks`
-          : `/assessments/classes/${cid}/exams`;
+          ? `/assessments/performance-tasks?classId=${encodeURIComponent(cid)}`
+          : `/assessments/exams?classId=${encodeURIComponent(cid)}`;
 
 
     const rows =
@@ -5096,6 +5281,28 @@ const Teacher = {
           ? 'Performance Tasks'
           : 'Examinations';
 
+    // Exams are grouped into PRELIM / MIDTERM / FINAL tabs using each
+    // exam's existing exam_type field — no backend/schema change needed,
+    // this is purely a display grouping. The grading formula still treats
+    // all exams as one combined "exam" component, unchanged.
+    const examPeriods = ['Prelim', 'Midterm', 'Final'];
+    let visibleRows = rows;
+    let periodTabsHtml = '';
+    if (kind === 'exams' && Array.isArray(rows)) {
+      if (!Teacher.state.examPeriod) Teacher.state.examPeriod = 'All';
+      const activePeriod = Teacher.state.examPeriod;
+      visibleRows = activePeriod === 'All'
+        ? rows
+        : rows.filter(r => String(r.exam_type || '').toLowerCase() === activePeriod.toLowerCase());
+      periodTabsHtml = `
+        <div class="flex gap-2 border-b mb-4 overflow-x-auto">
+          ${['All', ...examPeriods].map(p => `
+            <button onclick="Teacher.setExamPeriod('${p}')"
+              class="px-4 py-2 text-xs font-bold whitespace-nowrap ${activePeriod === p ? 'border-b-2 border-eduBlue-600 text-eduBlue-600' : 'text-slate-500 hover:text-eduBlue-600'}">
+              ${p}
+            </button>`).join('')}
+        </div>`;
+    }
 
     box.innerHTML = `
 
@@ -5159,6 +5366,7 @@ const Teacher = {
 
         </div>
 
+        ${periodTabsHtml}
 
         <div
           class="grid
@@ -5168,16 +5376,18 @@ const Teacher = {
         >
 
           ${
-            Array.isArray(rows)
-              ? rows
-                  .map(
-                    r =>
-                      Teacher.assessmentCard(
-                        r,
-                        kind
+            Array.isArray(visibleRows)
+              ? (visibleRows.length
+                  ? visibleRows
+                      .map(
+                        r =>
+                          Teacher.assessmentCard(
+                            r,
+                            kind
+                          )
                       )
-                  )
-                  .join('')
+                      .join('')
+                  : `<p class="text-sm text-slate-500 italic col-span-2">No ${kind === 'exams' && Teacher.state.examPeriod !== 'All' ? Teacher.state.examPeriod.toLowerCase() + ' exams' : kind.replace('-', ' ')} yet.</p>`)
               : ''
           }
 
@@ -5187,6 +5397,11 @@ const Teacher = {
 
     `;
 
+  },
+
+  setExamPeriod(period) {
+    Teacher.state.examPeriod = period;
+    Teacher.renderAssessment('exams');
   },
 
 
@@ -5241,6 +5456,7 @@ const Teacher = {
                 item.maxScore ??
                 '—'
               )}
+              ${item.exam_type ? ` &middot; ${esc(item.exam_type)}` : ''}
 
             </p>
 
@@ -5352,6 +5568,13 @@ const Teacher = {
     ) return;
 
 
+    let examType = null;
+    if (kind === 'exams') {
+      examType = prompt('Exam period (Prelim, Midterm, or Final):', 'Prelim');
+      if (!examType || !examType.trim()) return;
+    }
+
+
     const endpoint =
       kind === 'quizzes'
         ? '/assessments/quizzes'
@@ -5371,7 +5594,9 @@ const Teacher = {
 
           title,
 
-          maxScore
+          maxScore,
+
+          ...(examType ? { examType: examType.trim() } : {})
         }
       );
 
