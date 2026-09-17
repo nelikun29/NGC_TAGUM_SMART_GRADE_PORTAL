@@ -1,0 +1,201 @@
+// Teacher Dashboard Enhancements
+// Loaded after app.js. Keeps the existing application logic intact and adds:
+// - Enhanced class cards
+// - Students tab
+// - Remove one / Remove All active students
+// - Delete attendance session
+
+(() => {
+  if (typeof Teacher === 'undefined') return;
+
+  const originalRender = Teacher.render.bind(Teacher);
+  const originalSwitchTab = Teacher.switchTab.bind(Teacher);
+  const originalRenderAttendance = Teacher.renderAttendance.bind(Teacher);
+
+  Teacher.renderClassCard = function(c) {
+    const studentCount = Number(c.student_count || 0);
+    const pendingCount = Number(c.pending_count || 0);
+    const selected = String(c.id) === String(Teacher.state.classId);
+
+    return `
+      <article class="group overflow-hidden rounded-3xl border ${selected ? 'border-eduBlue-400 ring-4 ring-eduBlue-100/70' : 'border-slate-200'} bg-white shadow-sm hover:shadow-xl transition-all duration-300">
+        <div class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-eduBlue-700 to-eduBlue-600 px-5 py-5 text-white">
+          <div class="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/10"></div>
+          <div class="absolute -bottom-10 left-12 h-24 w-24 rounded-full bg-blue-300/10"></div>
+          <div class="relative flex items-start justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                <i class="fa-solid fa-book-open"></i>
+              </span>
+              <div class="min-w-0">
+                <h4 class="truncate text-lg font-black" title="${esc(c.subject || '')}">${esc(c.subject || 'Untitled Subject')}</h4>
+                <p class="mt-1 text-xs font-semibold text-blue-100">${esc(c.year_level || 'Year Level')} <span class="mx-1 opacity-60">•</span> ${esc(c.section || 'Section')}</p>
+              </div>
+            </div>
+            <span class="shrink-0 rounded-full ${selected ? 'bg-amber-300 text-slate-900' : 'bg-emerald-400/20 text-emerald-100 ring-1 ring-emerald-300/30'} px-2.5 py-1 text-[9px] font-black uppercase tracking-wider">
+              ${selected ? 'Selected' : (c.is_active === false ? 'Inactive' : 'Active')}
+            </span>
+          </div>
+        </div>
+
+        <div class="p-5">
+          <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 space-y-3">
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-slate-500"><i class="fa-solid fa-door-open mr-2 text-slate-400"></i>Room</span>
+              <strong class="text-slate-700">${esc(c.room_number || 'Not assigned')}</strong>
+            </div>
+            <div class="h-px bg-slate-200/70"></div>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Class Code</p>
+                <code class="mt-1 block text-sm font-black tracking-wider text-eduBlue-700">${esc(c.class_code || '—')}</code>
+              </div>
+              <button type="button" onclick="Teacher.copyClassCode('${esc(c.class_code || '')}')" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-eduBlue-600" title="Copy class code">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-4 grid grid-cols-2 gap-3">
+            <button type="button" onclick="Teacher.openStudents('${esc(c.id)}')" class="rounded-2xl bg-blue-50 p-3 text-left hover:bg-blue-100">
+              <div class="flex items-center gap-2 text-xs font-bold text-blue-700"><i class="fa-solid fa-users"></i> Students</div>
+              <p class="mt-1 text-2xl font-black text-slate-800">${studentCount}</p>
+            </button>
+            <button type="button" onclick="Teacher.openApprovals('${esc(c.id)}')" class="rounded-2xl ${pendingCount ? 'bg-amber-50 hover:bg-amber-100' : 'bg-slate-50 hover:bg-slate-100'} p-3 text-left">
+              <div class="flex items-center gap-2 text-xs font-bold ${pendingCount ? 'text-amber-700' : 'text-slate-500'}"><i class="fa-solid fa-user-clock"></i> Pending</div>
+              <p class="mt-1 text-2xl font-black ${pendingCount ? 'text-amber-700' : 'text-slate-800'}">${pendingCount}</p>
+            </button>
+          </div>
+
+          <button type="button" onclick="Teacher.selectClass('${esc(c.id)}')" class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-eduBlue-600 px-3 py-3 text-xs font-black text-white shadow-sm hover:bg-eduBlue-700">
+            <i class="fa-solid fa-folder-open"></i> Open Class
+          </button>
+          <button type="button" onclick="Teacher.editClass('${esc(c.id)}')" class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+            <i class="fa-solid fa-pen-to-square"></i> Edit Class
+          </button>
+        </div>
+      </article>`;
+  };
+
+  Teacher.render = async function() {
+    await originalRender();
+    const tabBar = document.querySelector('#teacher-section #teacher-tab-content')?.previousElementSibling;
+    if (!tabBar || tabBar.querySelector('[data-enhanced-students-tab]')) return;
+    const gradebook = Array.from(tabBar.querySelectorAll('button')).find(b => b.textContent.toLowerCase().includes('gradebook'));
+    if (!gradebook) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.enhancedStudentsTab = 'true';
+    btn.className = `tab-btn whitespace-nowrap px-4 py-3 text-sm font-semibold ${Teacher.state.tab === 'students' ? 'active' : ''}`;
+    btn.innerHTML = '<i class="fa-solid fa-users mr-1"></i> Students';
+    btn.onclick = () => Teacher.switchTab('students');
+    gradebook.before(btn);
+  };
+
+  Teacher.switchTab = function(tab) {
+    Teacher.state.tab = tab;
+    if (tab === 'students') {
+      document.querySelectorAll('#teacher-section .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.enhancedStudentsTab === 'true'));
+      return Teacher.renderStudents();
+    }
+    return originalSwitchTab(tab);
+  };
+
+  Teacher.openStudents = async function(classId) {
+    Teacher.state.classId = classId;
+    Teacher.state.tab = 'students';
+    await Teacher.render();
+    Teacher.switchTab('students');
+  };
+
+  Teacher.openApprovals = async function(classId) {
+    Teacher.state.classId = classId;
+    Teacher.state.tab = 'approvals';
+    await Teacher.render();
+  };
+
+  Teacher.renderStudents = async function() {
+    const box = document.getElementById('teacher-tab-content');
+    const cid = Teacher.state.classId;
+    if (!box || !cid) return;
+    box.innerHTML = '<div class="py-10 text-center text-sm text-slate-400">Loading students…</div>';
+    const rows = await api('GET', `/classes/${cid}/roster`).catch(() => []);
+    const cls = Teacher.getSelectedClass();
+
+    box.innerHTML = `
+      <div class="space-y-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h4 class="font-black text-slate-800">Students</h4>
+            <p class="mt-1 text-xs text-slate-500">${rows.length} active student${rows.length === 1 ? '' : 's'} in ${esc(cls?.subject || 'this class')}. Removing a student does not delete the student account or historical academic records.</p>
+          </div>
+          ${rows.length ? `<button type="button" onclick="Teacher.removeAllStudents()" class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-black text-red-700 hover:bg-red-100"><i class="fa-solid fa-user-minus"></i> Remove All Students</button>` : ''}
+        </div>
+        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          ${rows.length ? rows.map(s => `
+            <div class="flex flex-col gap-3 border-b border-slate-100 p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 font-black text-eduBlue-700">${esc((s.first_name || '?').charAt(0))}${esc((s.last_name || '?').charAt(0))}</span>
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-black text-slate-800">${esc(s.last_name)}, ${esc(s.first_name)} ${esc(s.middle_name || '')}</p>
+                  <p class="mt-0.5 text-xs text-slate-500">Student No. ${esc(s.student_number || '—')}</p>
+                </div>
+              </div>
+              <button type="button" onclick="Teacher.removeStudent('${esc(s.id)}', '${esc(`${s.first_name || ''} ${s.last_name || ''}`.trim())}')" class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50"><i class="fa-solid fa-user-minus"></i> Remove</button>
+            </div>`).join('') : `<div class="py-12 text-center"><i class="fa-solid fa-users-slash text-2xl text-slate-300"></i><p class="mt-3 text-sm font-bold text-slate-600">No active students</p><p class="mt-1 text-xs text-slate-400">Approved students will appear here.</p></div>`}
+        </div>
+      </div>`;
+  };
+
+  Teacher.removeStudent = async function(studentId, studentName) {
+    if (!confirm(`Remove ${studentName || 'this student'} from this class?\n\nThe student account and historical academic records will be preserved.`)) return;
+    try {
+      await api('POST', `/classes/${Teacher.state.classId}/students/${studentId}/remove`);
+      Toast.show('Student Removed', `${studentName || 'Student'} was removed from this class.`, 'success');
+      await Teacher.render();
+    } catch {}
+  };
+
+  Teacher.removeAllStudents = async function() {
+    const cls = Teacher.getSelectedClass();
+    const phrase = prompt(`Remove ALL active students from ${cls?.subject || 'this class'}?\n\nStudent accounts and historical records will be preserved. Pending requests will not be affected.\n\nType REMOVE ALL to confirm:`);
+    if (phrase !== 'REMOVE ALL') {
+      if (phrase !== null) Toast.show('Not Removed', 'Confirmation text did not match REMOVE ALL.', 'info');
+      return;
+    }
+    try {
+      const data = await api('POST', `/classes/${Teacher.state.classId}/students/remove-all`);
+      Toast.show('Students Removed', data.message || 'All active students were removed.', 'success');
+      await Teacher.render();
+    } catch {}
+  };
+
+  Teacher.renderAttendance = async function() {
+    await originalRenderAttendance();
+    const cid = Teacher.state.classId;
+    if (!cid) return;
+    const rows = await api('GET', `/attendance/classes/${cid}/sessions`).catch(() => []);
+    const box = document.getElementById('teacher-tab-content');
+    if (!box || !Array.isArray(rows) || !rows.length) return;
+    const sessionContainers = box.querySelectorAll('.glass-card > div.p-4');
+    sessionContainers.forEach((container, index) => {
+      const r = rows[index];
+      if (!r) return;
+      const manage = container.querySelector('button');
+      if (!manage || container.querySelector('[data-delete-session]')) return;
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-3';
+      actions.innerHTML = `<button type="button" onclick="Teacher.openSession('${esc(r.id)}')" class="text-xs font-bold text-eduBlue-600">Manage</button><button type="button" data-delete-session onclick="Teacher.deleteAttendanceSession('${esc(r.id)}', '${esc(r.session_date || r.date || 'this session')}')" class="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700"><i class="fa-solid fa-trash-can"></i> Delete</button>`;
+      manage.replaceWith(actions);
+    });
+  };
+
+  Teacher.deleteAttendanceSession = async function(sessionId, sessionDate) {
+    if (!confirm(`Delete attendance session ${sessionDate}?\n\nAll attendance records recorded specifically for this session will also be deleted. This action cannot be undone.`)) return;
+    try {
+      await api('DELETE', `/attendance/sessions/${sessionId}`);
+      Toast.show('Session Deleted', 'Attendance session deleted successfully.', 'success');
+      await Teacher.renderAttendance();
+    } catch {}
+  };
+})();
