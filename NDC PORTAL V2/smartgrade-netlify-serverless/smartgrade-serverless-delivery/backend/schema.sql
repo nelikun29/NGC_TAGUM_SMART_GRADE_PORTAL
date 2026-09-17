@@ -207,3 +207,24 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);
 CREATE INDEX IF NOT EXISTS idx_enrollments_class ON enrollments(class_id);
 CREATE INDEX IF NOT EXISTS idx_attrec_session ON attendance_records(session_id);
+
+-- ===================== GRADE ADJUSTMENTS =====================
+-- Manual teacher adjustment layer, additive to (never replacing) the
+-- underlying records. Exactly one adjustment row can exist per
+-- (student, class, component). The grading engine ADDS adjustment_points
+-- to the raw computed total for that component before turning it into a
+-- percentage — original attendance/quiz/performance/exam records are never
+-- modified or deleted by an adjustment.
+CREATE TABLE IF NOT EXISTS grade_adjustments (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id),
+  class_id TEXT NOT NULL REFERENCES classes(id),
+  component TEXT NOT NULL CHECK(component IN ('attendance','quiz','performance','exam')),
+  adjustment_points NUMERIC NOT NULL DEFAULT 0,
+  reason TEXT,
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(student_id, class_id, component)
+);
+
