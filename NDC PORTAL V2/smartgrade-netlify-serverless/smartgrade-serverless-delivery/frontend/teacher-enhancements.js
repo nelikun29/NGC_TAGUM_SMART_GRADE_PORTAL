@@ -1,9 +1,9 @@
 // Teacher Dashboard Enhancements
 // Loaded after app.js. Keeps existing application logic intact and adds:
 // - Reference-inspired teacher class cards and selected-class panel
-// - Students tab
-// - Remove one / Remove All active students
-// - Delete attendance session
+// - Students tab and safe student removal
+// - Attendance-session deletion
+// - Live pending-approval number badges for Teacher and Admin tabs
 
 (() => {
   if (typeof Teacher === 'undefined') return;
@@ -11,6 +11,39 @@
   const originalRender = Teacher.render.bind(Teacher);
   const originalSwitchTab = Teacher.switchTab.bind(Teacher);
   const originalRenderAttendance = Teacher.renderAttendance.bind(Teacher);
+
+  const badgeHtml = (id, count) => `<span id="${id}" class="${count > 0 ? 'inline-flex' : 'hidden'} ml-1 min-w-[20px] h-5 px-1.5 items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-black leading-none">${count > 99 ? '99+' : count}</span>`;
+
+  function setBadge(id, count) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const n = Number(count || 0);
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.classList.toggle('hidden', n === 0);
+    el.classList.toggle('inline-flex', n > 0);
+  }
+
+  function ensureTeacherApprovalBadge() {
+    const tabBar = document.querySelector('#teacher-section #teacher-tab-content')?.previousElementSibling;
+    if (!tabBar) return;
+    const btn = Array.from(tabBar.querySelectorAll('button')).find(b => b.textContent.trim().toLowerCase().startsWith('approvals'));
+    if (!btn) return;
+    let badge = document.getElementById('teacher-approval-tab-badge');
+    if (!badge) btn.insertAdjacentHTML('beforeend', badgeHtml('teacher-approval-tab-badge', 0));
+
+    const cls = Teacher.getSelectedClass?.();
+    setBadge('teacher-approval-tab-badge', Number(cls?.pending_count || 0));
+  }
+
+  function ensureAdminApprovalBadge() {
+    const tabBar = document.querySelector('#admin-section #admin-tab-content')?.previousElementSibling;
+    if (!tabBar) return;
+    const btn = Array.from(tabBar.querySelectorAll('button')).find(b => b.textContent.trim().toLowerCase().startsWith('approvals'));
+    if (!btn) return;
+    let badge = document.getElementById('admin-approval-tab-badge');
+    if (!badge) btn.insertAdjacentHTML('beforeend', badgeHtml('admin-approval-tab-badge', 0));
+    setBadge('admin-approval-tab-badge', Number(ApprovalManager?.state?.adminPending || 0));
+  }
 
   const paletteFor = c => {
     const list = [
@@ -29,51 +62,18 @@
     const pendingCount = Number(c.pending_count || 0);
     const selected = String(c.id) === String(Teacher.state.classId);
     const p = paletteFor(c);
-
     return `
       <article class="overflow-hidden rounded-2xl border ${selected ? `${p[5]} ring-2 ring-violet-200` : 'border-slate-200'} bg-white shadow-lg shadow-slate-200/60 hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
         <div class="relative overflow-hidden bg-gradient-to-br ${p[0]} ${p[1]} ${p[2]} px-5 py-5 text-white min-h-[116px]">
           <i class="fa-solid fa-book-open absolute -right-2 bottom-[-24px] text-[96px] text-white/10 rotate-[-8deg]"></i>
           <div class="relative flex items-start justify-between gap-3">
-            <div class="flex min-w-0 items-center gap-4">
-              <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-xl ${p[4]} shadow-sm">
-                <i class="fa-solid fa-book-open"></i>
-              </span>
-              <div class="min-w-0">
-                <h4 class="truncate text-xl font-black tracking-tight" title="${esc(c.subject || '')}">${esc(c.subject || 'Untitled Subject')}</h4>
-                <p class="mt-1 text-xs font-bold text-white/90">${esc(c.year_level || 'Year Level')} <span class="mx-2">•</span> ${esc(c.section || 'Section')}</p>
-              </div>
-            </div>
-            <div class="flex flex-col items-end gap-2">
-              ${selected ? '<span class="rounded-full bg-white/90 px-3 py-1 text-[9px] font-black uppercase tracking-wide text-violet-800">Selected</span>' : ''}
-              <span class="rounded-full bg-white/85 px-3 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-700"><i class="fa-solid fa-circle mr-1 text-[7px]"></i>${c.is_active === false ? 'Inactive' : 'Active'}</span>
-            </div>
+            <div class="flex min-w-0 items-center gap-4"><span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-xl ${p[4]} shadow-sm"><i class="fa-solid fa-book-open"></i></span><div class="min-w-0"><h4 class="truncate text-xl font-black tracking-tight" title="${esc(c.subject || '')}">${esc(c.subject || 'Untitled Subject')}</h4><p class="mt-1 text-xs font-bold text-white/90">${esc(c.year_level || 'Year Level')} <span class="mx-2">•</span> ${esc(c.section || 'Section')}</p></div></div>
+            <div class="flex flex-col items-end gap-2">${selected ? '<span class="rounded-full bg-white/90 px-3 py-1 text-[9px] font-black uppercase tracking-wide text-violet-800">Selected</span>' : ''}<span class="rounded-full bg-white/85 px-3 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-700"><i class="fa-solid fa-circle mr-1 text-[7px]"></i>${c.is_active === false ? 'Inactive' : 'Active'}</span></div>
           </div>
         </div>
-
         <div class="p-5">
-          <div class="grid grid-cols-[1fr_auto_1.35fr] items-center gap-4">
-            <div class="flex items-center gap-3 min-w-0">
-              <span class="text-xl text-slate-400"><i class="fa-solid fa-door-open"></i></span>
-              <div><p class="text-[10px] font-semibold text-slate-500">Room</p><p class="text-sm font-black text-slate-800">${esc(c.room_number || 'Not assigned')}</p></div>
-            </div>
-            <div class="h-12 w-px bg-slate-200"></div>
-            <div class="flex min-w-0 items-center gap-3">
-              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${p[3]} text-lg ${p[4]}"><i class="fa-solid fa-hashtag"></i></span>
-              <div class="min-w-0 flex-1"><p class="text-[10px] font-semibold text-slate-500">Class Code</p><code class="block truncate text-xs font-black text-slate-800">${esc(c.class_code || '—')}</code></div>
-              <button type="button" onclick="Teacher.copyClassCode('${esc(c.class_code || '')}')" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200" title="Copy class code"><i class="fa-regular fa-copy"></i></button>
-            </div>
-          </div>
-
-          <div class="mt-5 grid grid-cols-2 gap-3">
-            <button type="button" onclick="Teacher.openStudents('${esc(c.id)}')" class="rounded-xl bg-blue-50 px-4 py-3 text-left hover:bg-blue-100 transition">
-              <div class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><i class="fa-solid fa-users"></i></span><div><p class="text-[10px] font-semibold text-slate-500">Students</p><p class="text-lg font-black text-slate-800">${studentCount}</p></div></div>
-            </button>
-            <button type="button" onclick="Teacher.openApprovals('${esc(c.id)}')" class="rounded-xl bg-amber-50 px-4 py-3 text-left hover:bg-amber-100 transition">
-              <div class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-white"><i class="fa-solid fa-clock"></i></span><div><p class="text-[10px] font-semibold text-amber-700">Pending</p><p class="text-lg font-black text-slate-800">${pendingCount}</p></div></div>
-            </button>
-          </div>
-
+          <div class="grid grid-cols-[1fr_auto_1.35fr] items-center gap-4"><div class="flex items-center gap-3 min-w-0"><span class="text-xl text-slate-400"><i class="fa-solid fa-door-open"></i></span><div><p class="text-[10px] font-semibold text-slate-500">Room</p><p class="text-sm font-black text-slate-800">${esc(c.room_number || 'Not assigned')}</p></div></div><div class="h-12 w-px bg-slate-200"></div><div class="flex min-w-0 items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${p[3]} text-lg ${p[4]}"><i class="fa-solid fa-hashtag"></i></span><div class="min-w-0 flex-1"><p class="text-[10px] font-semibold text-slate-500">Class Code</p><code class="block truncate text-xs font-black text-slate-800">${esc(c.class_code || '—')}</code></div><button type="button" onclick="Teacher.copyClassCode('${esc(c.class_code || '')}')" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200" title="Copy class code"><i class="fa-regular fa-copy"></i></button></div></div>
+          <div class="mt-5 grid grid-cols-2 gap-3"><button type="button" onclick="Teacher.openStudents('${esc(c.id)}')" class="rounded-xl bg-blue-50 px-4 py-3 text-left hover:bg-blue-100 transition"><div class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><i class="fa-solid fa-users"></i></span><div><p class="text-[10px] font-semibold text-slate-500">Students</p><p class="text-lg font-black text-slate-800">${studentCount}</p></div></div></button><button type="button" onclick="Teacher.openApprovals('${esc(c.id)}')" class="rounded-xl bg-amber-50 px-4 py-3 text-left hover:bg-amber-100 transition"><div class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-white"><i class="fa-solid fa-clock"></i></span><div><p class="text-[10px] font-semibold text-amber-700">Pending</p><p class="text-lg font-black text-slate-800">${pendingCount}</p></div></div></button></div>
           <button type="button" onclick="Teacher.selectClass('${esc(c.id)}')" class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 px-3 py-3 text-sm font-black text-white shadow-md hover:from-blue-800 hover:to-blue-700"><i class="fa-solid fa-folder-open"></i> Open Class</button>
           <button type="button" onclick="Teacher.editClass('${esc(c.id)}')" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-pen-to-square"></i> Edit Class</button>
         </div>
@@ -82,8 +82,6 @@
 
   Teacher.render = async function() {
     await originalRender();
-
-    // Upgrade selected-class summary to match the reference visual language.
     const selectedName = document.getElementById('teacher-selected-class-name');
     if (selectedName) {
       const cls = Teacher.getSelectedClass();
@@ -96,16 +94,19 @@
     }
 
     const tabBar = document.querySelector('#teacher-section #teacher-tab-content')?.previousElementSibling;
-    if (!tabBar || tabBar.querySelector('[data-enhanced-students-tab]')) return;
-    const gradebook = Array.from(tabBar.querySelectorAll('button')).find(b => b.textContent.toLowerCase().includes('gradebook'));
-    if (!gradebook) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.dataset.enhancedStudentsTab = 'true';
-    btn.className = `tab-btn whitespace-nowrap px-4 py-3 text-sm font-semibold ${Teacher.state.tab === 'students' ? 'active' : ''}`;
-    btn.innerHTML = '<i class="fa-solid fa-users mr-1"></i> Students';
-    btn.onclick = () => Teacher.switchTab('students');
-    gradebook.before(btn);
+    if (tabBar && !tabBar.querySelector('[data-enhanced-students-tab]')) {
+      const gradebook = Array.from(tabBar.querySelectorAll('button')).find(b => b.textContent.toLowerCase().includes('gradebook'));
+      if (gradebook) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.enhancedStudentsTab = 'true';
+        btn.className = `tab-btn whitespace-nowrap px-4 py-3 text-sm font-semibold ${Teacher.state.tab === 'students' ? 'active' : ''}`;
+        btn.innerHTML = '<i class="fa-solid fa-users mr-1"></i> Students';
+        btn.onclick = () => Teacher.switchTab('students');
+        gradebook.before(btn);
+      }
+    }
+    ensureTeacherApprovalBadge();
   };
 
   Teacher.switchTab = function(tab) {
@@ -114,21 +115,13 @@
       document.querySelectorAll('#teacher-section .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.enhancedStudentsTab === 'true'));
       return Teacher.renderStudents();
     }
-    return originalSwitchTab(tab);
+    const result = originalSwitchTab(tab);
+    setTimeout(ensureTeacherApprovalBadge, 0);
+    return result;
   };
 
-  Teacher.openStudents = async function(classId) {
-    Teacher.state.classId = classId;
-    Teacher.state.tab = 'students';
-    await Teacher.render();
-    Teacher.switchTab('students');
-  };
-
-  Teacher.openApprovals = async function(classId) {
-    Teacher.state.classId = classId;
-    Teacher.state.tab = 'approvals';
-    await Teacher.render();
-  };
+  Teacher.openStudents = async function(classId) { Teacher.state.classId = classId; Teacher.state.tab = 'students'; await Teacher.render(); Teacher.switchTab('students'); };
+  Teacher.openApprovals = async function(classId) { Teacher.state.classId = classId; Teacher.state.tab = 'approvals'; await Teacher.render(); };
 
   Teacher.renderStudents = async function() {
     const box = document.getElementById('teacher-tab-content');
@@ -175,4 +168,47 @@
     if (!confirm(`Delete attendance session ${sessionDate}?\n\nAll attendance records recorded specifically for this session will also be deleted. This action cannot be undone.`)) return;
     try { await api('DELETE', `/attendance/sessions/${sessionId}`); Toast.show('Session Deleted', 'Attendance session deleted successfully.', 'success'); await Teacher.renderAttendance(); } catch {}
   };
+
+  // Admin already has live pending counts through ApprovalManager. Add the
+  // requested small number directly to the Approvals tab without changing
+  // the existing approval workflow.
+  if (typeof Admin !== 'undefined') {
+    const originalAdminRender = Admin.render.bind(Admin);
+    const originalAdminSwitchTab = Admin.switchTab.bind(Admin);
+    const originalAdminRenderApprovals = Admin.renderApprovals.bind(Admin);
+
+    Admin.render = async function(...args) {
+      const result = await originalAdminRender(...args);
+      ensureAdminApprovalBadge();
+      ApprovalManager.forceRefresh().then(() => ensureAdminApprovalBadge()).catch(() => {});
+      return result;
+    };
+
+    Admin.switchTab = function(tab) {
+      const result = originalAdminSwitchTab(tab);
+      setTimeout(ensureAdminApprovalBadge, 0);
+      return result;
+    };
+
+    Admin.renderApprovals = async function(...args) {
+      const result = await originalAdminRenderApprovals(...args);
+      setBadge('admin-approval-tab-badge', Number(ApprovalManager?.state?.adminPending || 0));
+      return result;
+    };
+  }
+
+  // Keep tab badges synchronized with the existing 30-second approval
+  // refresh and with approve/reject actions.
+  if (typeof ApprovalManager !== 'undefined') {
+    const originalEnhancedUI = ApprovalManager.updateEnhancedUI.bind(ApprovalManager);
+    ApprovalManager.updateEnhancedUI = function(...args) {
+      const result = originalEnhancedUI(...args);
+      if (Store?.user?.role === 'admin') ensureAdminApprovalBadge();
+      if (Store?.user?.role === 'teacher') {
+        const selected = Teacher.getSelectedClass?.();
+        setBadge('teacher-approval-tab-badge', Number(selected?.pending_count || 0));
+      }
+      return result;
+    };
+  }
 })();
