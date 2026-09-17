@@ -17,6 +17,23 @@ const reportRoutes=require('./routes/reports');
 const classManagementRoutes=require('./routes/class-management');
 const gradingSchemeRoutes=require('./routes/grading-schemes');
 const router=express.Router();
-router.use(helmet());router.use(cors({origin:process.env.CORS_ORIGIN?process.env.CORS_ORIGIN.split(','):'*'}));router.use(express.json({limit:'1mb'}));router.use(rateLimit({windowMs:60000,max:300,keyGenerator:req=>req.ip||req.headers['x-forwarded-for']||'netlify-client'}));
+router.use(helmet());
+router.use(cors({origin:process.env.CORS_ORIGIN?process.env.CORS_ORIGIN.split(','):'*'}));
+router.use(express.json({limit:'1mb'}));
+// Netlify Functions can invoke Express without populating req.ip. Use the
+// platform-provided forwarding headers directly and avoid express-rate-limit's
+// req.ip validation path while retaining per-client throttling.
+router.use(rateLimit({
+  windowMs:60000,
+  max:300,
+  validate:{ip:false},
+  keyGenerator:req=>{
+    const forwarded=req.headers['x-forwarded-for'];
+    if(typeof forwarded==='string'&&forwarded.trim())return forwarded.split(',')[0].trim();
+    const nfIp=req.headers['x-nf-client-connection-ip'];
+    if(typeof nfIp==='string'&&nfIp.trim())return nfIp.trim();
+    return 'netlify-client';
+  }
+}));
 router.use('/auth',authRoutes);router.use('/classes',classRoutes);router.use('/attendance',attendanceRoutes);router.use('/assessments',assessmentGuard,assessmentRoutes);router.use('/assessments',assessmentManagementRoutes);router.use('/custom-assessments',customAssessmentRoutes);router.use('/grades',gradeRoutes);router.use('/grade-export',gradeExportRoutes);router.use('/admin',adminRoutes);router.use('/reports',reportRoutes);router.use('/grading-schemes',gradingSchemeRoutes);router.use('/',classManagementRoutes);
 router.get('/health',(req,res)=>res.json({status:'ok',time:new Date().toISOString()}));router.get('/config',(req,res)=>res.json({institutionName:process.env.INSTITUTION_NAME||'Smart Grade & Attendance Portal'}));router.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'An unexpected server error occurred.'});});module.exports=router;
