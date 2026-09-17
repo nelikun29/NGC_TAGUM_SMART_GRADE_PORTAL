@@ -13,11 +13,21 @@ const router = express.Router();
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
+function netlifyClientKey(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
+  const nfIp = req.headers['x-nf-client-connection-ip'];
+  if (typeof nfIp === 'string' && nfIp.trim()) return nfIp.trim();
+  return 'netlify-client';
+}
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { ip: false },
+  keyGenerator: netlifyClientKey,
   message: { error: 'Too many login attempts. Please try again later.' },
 });
 
