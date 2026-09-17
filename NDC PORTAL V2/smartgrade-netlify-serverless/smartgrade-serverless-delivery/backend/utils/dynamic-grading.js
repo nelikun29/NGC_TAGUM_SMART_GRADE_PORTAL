@@ -36,8 +36,10 @@ function summarize(rows,method='average_percentage',fixedDenominator=null) {
   }
 
   if(!rows.length||scored.length<eligible.length||!scored.length)return {percent:null,complete:false};
-  if(method==='points_total'){const raw=scored.reduce((s,r)=>s+Number(r.raw_score),0),max=scored.reduce((s,r)=>s+Number(r.max_score),0);return {percent:(raw/max)*100,complete:true,earned:raw,max};}
-  return {percent:scored.reduce((s,r)=>s+(Number(r.raw_score)/Number(r.max_score))*100,0)/scored.length,complete:true};
+  const raw=scored.reduce((s,r)=>s+Number(r.raw_score),0);
+  const max=scored.reduce((s,r)=>s+Number(r.max_score),0);
+  if(method==='points_total')return {percent:(raw/max)*100,complete:true,earned:raw,max};
+  return {percent:scored.reduce((s,r)=>s+(Number(r.raw_score)/Number(r.max_score))*100,0)/scored.length,complete:true,earned:raw,max};
 }
 
 async function assessmentRows(studentId,classId,sourceType,sourceFilter=null){
