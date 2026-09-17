@@ -1,112 +1,33 @@
-const express = require('express');
-const crypto = require('crypto');
-const { pool } = require('../db');
-const { authenticate, requireRole, requireClassOwnership } = require('../middleware/auth');
-const { audit } = require('../utils/audit');
-
-const router = express.Router();
-router.use(authenticate);
-
-const n = v => Number(v);
-const validWeight = v => Number.isFinite(n(v)) && n(v) >= 0 && n(v) <= 100;
-const keyOf = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-
-async function loadScheme(classId) {
-  const scheme = (await pool.query('SELECT * FROM grading_schemes WHERE class_id=$1', [classId])).rows[0];
-  if (!scheme) return null;
-  const components = (await pool.query('SELECT * FROM grading_components WHERE scheme_id=$1 ORDER BY sort_order,name', [scheme.id])).rows;
-  for (const c of components) {
-    c.subcomponents = (await pool.query('SELECT * FROM grading_subcomponents WHERE component_id=$1 ORDER BY sort_order,name', [c.id])).rows;
-  }
-  return { ...scheme, components };
+const express=require('express');
+const crypto=require('crypto');
+const {pool}=require('../db');
+const {authenticate,requireRole,requireClassOwnership}=require('../middleware/auth');
+const {audit}=require('../utils/audit');
+const router=express.Router();router.use(authenticate);
+const n=v=>Number(v);const validWeight=v=>Number.isFinite(n(v))&&n(v)>=0&&n(v)<=100;
+const keyOf=v=>String(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+async function safeAudit(req,data){try{await audit(req,data);}catch(e){console.error('Audit logging failed:',e);}}
+async function loadScheme(classId){const scheme=(await pool.query('SELECT * FROM grading_schemes WHERE class_id=$1',[classId])).rows[0];if(!scheme)return null;const components=(await pool.query('SELECT * FROM grading_components WHERE scheme_id=$1 ORDER BY sort_order,name',[scheme.id])).rows;for(const c of components)c.subcomponents=(await pool.query('SELECT * FROM grading_subcomponents WHERE component_id=$1 ORDER BY sort_order,name',[c.id])).rows;return {...scheme,components};}
+async function hasAssessmentData(client,classId){const q=await client.query(`SELECT EXISTS(SELECT 1 FROM quizzes WHERE class_id=$1) OR EXISTS(SELECT 1 FROM performance_tasks WHERE class_id=$1) OR EXISTS(SELECT 1 FROM examinations WHERE class_id=$1) OR EXISTS(SELECT 1 FROM custom_assessments WHERE class_id=$1) AS has_data`,[classId]);return q.rows[0].has_data;}
+function validateComponents(components){
+ if(!Array.isArray(components)||!components.length)return 'At least one grading component is required.';
+ const active=components.filter(c=>c.isActive!==false);if(active.some(c=>!validWeight(c.weight)))return 'Each component weight must be between 0 and 100.';
+ const total=active.reduce((s,c)=>s+n(c.weight),0);if(Math.abs(total-100)>0.01)return `Active grading component weights must total exactly 100%. Current total: ${total}%.`;
+ const keys=new Set();for(const c of components){const key=keyOf(c.componentKey||c.name);if(!key||keys.has(key))return 'Component names/keys must be unique and non-empty.';keys.add(key);
+  if(c.sourceType==='attendance'&&c.isActive!==false&&(!Number.isFinite(n(c.maxPoints))||n(c.maxPoints)<=0))return 'Attendance Total Required Days must be greater than 0.';
+  const subs=(c.subcomponents||[]).filter(s=>s.isActive!==false);if(subs.length){if(subs.some(s=>!validWeight(s.weightShare)))return `Invalid subcomponent weight in ${c.name}.`;const st=subs.reduce((s,x)=>s+n(x.weightShare),0);if(Math.abs(st-100)>0.01)return `Subcomponents of ${c.name} must total exactly 100%. Current total: ${st}%.`;}
+ }return null;
 }
-
-router.get('/:classId', requireClassOwnership, async (req,res,next) => {
-  try { res.json({ scheme: await loadScheme(req.params.classId) }); } catch(e) { next(e); }
-});
-
-router.post('/:classId/initialize', requireRole('teacher','admin'), requireClassOwnership, async (req,res,next) => {
-  const client = await pool.connect();
-  try {
-    const { classId } = req.params;
-    await client.query('BEGIN');
-    let scheme = (await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE', [classId])).rows[0];
-    if (!scheme) {
-      const legacy = (await client.query('SELECT * FROM grading_weights WHERE class_id=$1', [classId])).rows[0] || {attendance_weight:10,quiz_weight:20,performance_weight:30,exam_weight:40};
-      const sid = crypto.randomUUID();
-      scheme = (await client.query(`INSERT INTO grading_schemes(id,class_id,name,state,created_by) VALUES($1,$2,$3,'draft',$4) RETURNING *`, [sid,classId,'Class Grading Scheme',req.user.id])).rows[0];
-      const defs = [
-        ['Attendance','attendance',legacy.attendance_weight,'attendance'],
-        ['Quizzes','quiz',legacy.quiz_weight,'quiz'],
-        ['Performance Tasks','performance',legacy.performance_weight,'performance'],
-        ['Examination','exam',legacy.exam_weight,'exam']
-      ];
-      for (let i=0;i<defs.length;i++) {
-        const d=defs[i];
-        await client.query(`INSERT INTO grading_components(id,scheme_id,name,component_key,weight,source_type,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)`, [crypto.randomUUID(),sid,d[0],d[1],d[2],d[3],i]);
-      }
-    }
-    await client.query('COMMIT');
-    res.status(201).json({ scheme: await loadScheme(classId) });
-  } catch(e) { await client.query('ROLLBACK'); next(e); } finally { client.release(); }
-});
-
-router.put('/:classId', requireRole('teacher','admin'), requireClassOwnership, async (req,res,next) => {
-  const client = await pool.connect();
-  try {
-    const { classId }=req.params;
-    const { name, components }=req.body;
-    if (!Array.isArray(components) || !components.length) return res.status(400).json({error:'At least one grading component is required.'});
-    const active=components.filter(c=>c.isActive !== false);
-    if (active.some(c=>!validWeight(c.weight))) return res.status(400).json({error:'Each component weight must be between 0 and 100.'});
-    const total=active.reduce((s,c)=>s+n(c.weight),0);
-    if (Math.abs(total-100)>0.01) return res.status(400).json({error:`Active grading component weights must total exactly 100%. Current total: ${total}%.`});
-    const keys=new Set();
-    for (const c of components) {
-      const key=keyOf(c.componentKey || c.name);
-      if (!key || keys.has(key)) return res.status(400).json({error:'Component names/keys must be unique and non-empty.'});
-      keys.add(key);
-      const subs=(c.subcomponents||[]).filter(s=>s.isActive !== false);
-      if (subs.length) {
-        if (subs.some(s=>!validWeight(s.weightShare))) return res.status(400).json({error:`Invalid subcomponent weight in ${c.name}.`});
-        const st=subs.reduce((s,x)=>s+n(x.weightShare),0);
-        if (Math.abs(st-100)>0.01) return res.status(400).json({error:`Subcomponents of ${c.name} must total exactly 100%. Current total: ${st}%.`});
-      }
-    }
-    await client.query('BEGIN');
-    const scheme=(await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE',[classId])).rows[0];
-    if (!scheme) { await client.query('ROLLBACK'); return res.status(409).json({error:'Initialize the grading scheme first.'}); }
-    if (scheme.state==='finalized') { await client.query('ROLLBACK'); return res.status(409).json({error:'This grading scheme is finalized and cannot be edited.'}); }
-    await client.query('UPDATE grading_schemes SET name=$1,version=version+1,updated_at=now() WHERE id=$2',[String(name||scheme.name).trim()||scheme.name,scheme.id]);
-    await client.query('DELETE FROM grading_components WHERE scheme_id=$1',[scheme.id]);
-    for (let i=0;i<components.length;i++) {
-      const c=components[i], cid=crypto.randomUUID(), key=keyOf(c.componentKey||c.name);
-      const source=['attendance','quiz','performance','exam','custom'].includes(c.sourceType)?c.sourceType:'custom';
-      const method=['average_percentage','points_total'].includes(c.calculationMethod)?c.calculationMethod:'average_percentage';
-      await client.query(`INSERT INTO grading_components(id,scheme_id,name,component_key,weight,source_type,calculation_method,sort_order,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[cid,scheme.id,String(c.name||'').trim(),key,n(c.weight),source,method,i,c.isActive!==false]);
-      const subs=c.subcomponents||[];
-      for(let j=0;j<subs.length;j++) {
-        const s=subs[j];
-        await client.query(`INSERT INTO grading_subcomponents(id,component_id,name,subcomponent_key,weight_share,source_filter,sort_order,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[crypto.randomUUID(),cid,String(s.name||'').trim(),keyOf(s.subcomponentKey||s.name),n(s.weightShare),s.sourceFilter||null,j,s.isActive!==false]);
-      }
-    }
-    await client.query('COMMIT');
-    await audit(req,{action:'grading_scheme_update',recordType:'grading_scheme',recordId:scheme.id,newValue:{classId,total,components:components.length}});
-    res.json({scheme:await loadScheme(classId)});
-  } catch(e) { try{await client.query('ROLLBACK');}catch{} next(e); } finally { client.release(); }
-});
-
-router.post('/:classId/state', requireRole('teacher','admin'), requireClassOwnership, async (req,res,next) => {
-  try {
-    const state=String(req.body.state||'');
-    if (!['draft','active','finalized'].includes(state)) return res.status(400).json({error:'Invalid grading scheme state.'});
-    const scheme=(await pool.query('SELECT * FROM grading_schemes WHERE class_id=$1',[req.params.classId])).rows[0];
-    if(!scheme) return res.status(404).json({error:'Grading scheme not found.'});
-    if(scheme.state==='finalized' && state!=='finalized') return res.status(409).json({error:'A finalized grading scheme cannot be reopened through this endpoint.'});
-    await pool.query('UPDATE grading_schemes SET state=$1,version=version+1,updated_at=now() WHERE id=$2',[state,scheme.id]);
-    await audit(req,{action:'grading_scheme_state',recordType:'grading_scheme',recordId:scheme.id,previousValue:scheme.state,newValue:state});
-    res.json({scheme:await loadScheme(req.params.classId)});
-  } catch(e){next(e);}
-});
-
+router.get('/:classId',requireClassOwnership,async(req,res,next)=>{try{res.json({scheme:await loadScheme(req.params.classId)});}catch(e){next(e);}});
+router.post('/:classId/initialize',requireRole('teacher','admin'),requireClassOwnership,async(req,res,next)=>{const client=await pool.connect();try{const {classId}=req.params;await client.query('BEGIN');let scheme=(await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE',[classId])).rows[0];let created=false;if(!scheme){const legacy=(await client.query('SELECT * FROM grading_weights WHERE class_id=$1',[classId])).rows[0]||{attendance_weight:10,quiz_weight:20,performance_weight:30,exam_weight:40};const sid=crypto.randomUUID();scheme=(await client.query(`INSERT INTO grading_schemes(id,class_id,name,state,created_by) VALUES($1,$2,$3,'draft',$4) RETURNING *`,[sid,classId,'Class Grading Scheme',req.user.id])).rows[0];const defs=[['Attendance','attendance',legacy.attendance_weight,'attendance'],['Quizzes','quiz',legacy.quiz_weight,'quiz'],['Performance Tasks','performance',legacy.performance_weight,'performance'],['Examination','exam',legacy.exam_weight,'exam']];for(let i=0;i<defs.length;i++){const d=defs[i];await client.query(`INSERT INTO grading_components(id,scheme_id,name,component_key,weight,source_type,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)`,[crypto.randomUUID(),sid,d[0],d[1],d[2],d[3],i]);}created=true;}await client.query('COMMIT');res.status(created?201:200).json({scheme:await loadScheme(classId)});}catch(e){try{await client.query('ROLLBACK');}catch{}next(e);}finally{client.release();}});
+router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,async(req,res,next)=>{const client=await pool.connect();try{const {classId}=req.params,{name,components}=req.body;const validation=validateComponents(components);if(validation)return res.status(400).json({error:validation});await client.query('BEGIN');const scheme=(await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE',[classId])).rows[0];if(!scheme){await client.query('ROLLBACK');return res.status(409).json({error:'Initialize the grading scheme first.'});}if(scheme.state==='finalized'){await client.query('ROLLBACK');return res.status(409).json({error:'This grading scheme is finalized and cannot be edited.'});}
+ const existing=(await client.query('SELECT * FROM grading_components WHERE scheme_id=$1',[scheme.id])).rows;const existingKeys=new Set(existing.map(c=>c.component_key));const requestedKeys=new Set(components.map(c=>keyOf(c.componentKey||c.name)));const structuralChange=existing.length!==components.length||[...existingKeys].some(k=>!requestedKeys.has(k));if(structuralChange&&await hasAssessmentData(client,classId)){await client.query('ROLLBACK');return res.status(409).json({error:'Component structure cannot be added or removed after assessment data exists. Preserve existing components; weights and settings may still be updated while the scheme is not finalized.'});}
+ await client.query('UPDATE grading_schemes SET name=$1,version=version+1,updated_at=now() WHERE id=$2',[String(name||scheme.name).trim()||scheme.name,scheme.id]);
+ for(let i=0;i<components.length;i++){const c=components[i],key=keyOf(c.componentKey||c.name),source=['attendance','quiz','performance','exam','custom'].includes(c.sourceType)?c.sourceType:'custom',method=['average_percentage','points_total'].includes(c.calculationMethod)?c.calculationMethod:'average_percentage';let row=existing.find(x=>x.component_key===key);let cid;if(row){cid=row.id;await client.query(`UPDATE grading_components SET name=$1,weight=$2,source_type=$3,calculation_method=$4,max_points=$5,sort_order=$6,is_active=$7,updated_at=now() WHERE id=$8`,[String(c.name||'').trim(),n(c.weight),source,method,c.maxPoints==null?null:n(c.maxPoints),i,c.isActive!==false,cid]);}else{cid=crypto.randomUUID();await client.query(`INSERT INTO grading_components(id,scheme_id,name,component_key,weight,source_type,calculation_method,max_points,sort_order,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[cid,scheme.id,String(c.name||'').trim(),key,n(c.weight),source,method,c.maxPoints==null?null:n(c.maxPoints),i,c.isActive!==false]);}
+  const subs=c.subcomponents||[];const oldSubs=(await client.query('SELECT * FROM grading_subcomponents WHERE component_id=$1',[cid])).rows;const oldMap=new Map(oldSubs.map(s=>[s.subcomponent_key,s]));const newKeys=new Set();for(let j=0;j<subs.length;j++){const s=subs[j],sk=keyOf(s.subcomponentKey||s.name);newKeys.add(sk);const old=oldMap.get(sk);if(old)await client.query(`UPDATE grading_subcomponents SET name=$1,weight_share=$2,source_filter=$3,sort_order=$4,is_active=$5,updated_at=now() WHERE id=$6`,[String(s.name||'').trim(),n(s.weightShare),s.sourceFilter||null,j,s.isActive!==false,old.id]);else await client.query(`INSERT INTO grading_subcomponents(id,component_id,name,subcomponent_key,weight_share,source_filter,sort_order,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[crypto.randomUUID(),cid,String(s.name||'').trim(),sk,n(s.weightShare),s.sourceFilter||null,j,s.isActive!==false]);}
+  for(const old of oldSubs)if(!newKeys.has(old.subcomponent_key)){const used=(await client.query('SELECT EXISTS(SELECT 1 FROM custom_assessments WHERE subcomponent_id=$1) used',[old.id])).rows[0].used;if(used){await client.query('ROLLBACK');return res.status(409).json({error:`Subcomponent ${old.name} already has assessment data and cannot be removed.`});}await client.query('DELETE FROM grading_subcomponents WHERE id=$1',[old.id]);}
+ }
+ await client.query('COMMIT');await safeAudit(req,{action:'grading_scheme_update',recordType:'grading_scheme',recordId:scheme.id,newValue:{classId,components:components.length}});res.json({scheme:await loadScheme(classId)});
+ }catch(e){try{await client.query('ROLLBACK');}catch{}next(e);}finally{client.release();}});
+router.post('/:classId/state',requireRole('teacher','admin'),requireClassOwnership,async(req,res,next)=>{const client=await pool.connect();try{const state=String(req.body.state||'');if(!['draft','active','finalized'].includes(state))return res.status(400).json({error:'Invalid grading scheme state.'});await client.query('BEGIN');const scheme=(await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE',[req.params.classId])).rows[0];if(!scheme){await client.query('ROLLBACK');return res.status(404).json({error:'Grading scheme not found.'});}if(scheme.state==='finalized'&&state!=='finalized'){await client.query('ROLLBACK');return res.status(409).json({error:'A finalized grading scheme cannot be reopened through this endpoint.'});}if(state==='active'||state==='finalized'){const loaded=await loadScheme(req.params.classId);const validation=validateComponents(loaded.components.map(c=>({name:c.name,componentKey:c.component_key,weight:c.weight,sourceType:c.source_type,maxPoints:c.max_points,isActive:c.is_active,subcomponents:c.subcomponents.map(s=>({name:s.name,subcomponentKey:s.subcomponent_key,weightShare:s.weight_share,isActive:s.is_active}))})));if(validation){await client.query('ROLLBACK');return res.status(400).json({error:`Cannot ${state==='active'?'activate':'finalize'} grading scheme: ${validation}`});}}await client.query('UPDATE grading_schemes SET state=$1,version=version+1,updated_at=now() WHERE id=$2',[state,scheme.id]);await client.query('COMMIT');await safeAudit(req,{action:'grading_scheme_state',recordType:'grading_scheme',recordId:scheme.id,previousValue:scheme.state,newValue:state});res.json({scheme:await loadScheme(req.params.classId)});}catch(e){try{await client.query('ROLLBACK');}catch{}next(e);}finally{client.release();}});
 module.exports=router;
