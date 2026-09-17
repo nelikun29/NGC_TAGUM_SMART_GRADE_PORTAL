@@ -11,6 +11,7 @@ const assessmentRoutes = require('./routes/assessments');
 const gradeRoutes = require('./routes/grades');
 const adminRoutes = require('./routes/admin');
 const reportRoutes = require('./routes/reports');
+const classManagementRoutes = require('./routes/class-management');
 
 const router = express.Router();
 
@@ -34,6 +35,10 @@ router.use('/assessments', assessmentRoutes);
 router.use('/grades', gradeRoutes);
 router.use('/admin', adminRoutes);
 router.use('/reports', reportRoutes);
+// Targeted management endpoints for removing class enrollments and deleting
+// attendance sessions. Mounted at / so their public paths remain /classes/*
+// and /attendance/* without disturbing the existing route modules.
+router.use('/', classManagementRoutes);
 
 router.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
