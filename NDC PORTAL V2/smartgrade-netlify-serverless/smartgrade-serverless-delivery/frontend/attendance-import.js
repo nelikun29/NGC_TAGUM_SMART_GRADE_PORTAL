@@ -20,10 +20,12 @@
       await loadScript('./quiz-create-fix.js');
       await loadScript('./reference-dashboard-theme.js');
       await loadScript('./student-class-card-enhancement.js');
+      await loadScript('./teacher-class-card-enhancement.js');
       await loadScript('./gradebook-raw-data.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.
-      if (typeof Teacher !== 'undefined' && Teacher.state?.classId && Store?.user?.role === 'teacher') {
-        Teacher.switchTab(Teacher.state.tab || 'gradebook');
+      if (typeof Teacher !== 'undefined' && Store?.user?.role === 'teacher') {
+        await Teacher.render();
+        if (Teacher.state?.classId) Teacher.switchTab(Teacher.state.tab || 'gradebook');
       }
       if (typeof Student !== 'undefined' && Store?.user?.role === 'student') {
         await Student.render();
