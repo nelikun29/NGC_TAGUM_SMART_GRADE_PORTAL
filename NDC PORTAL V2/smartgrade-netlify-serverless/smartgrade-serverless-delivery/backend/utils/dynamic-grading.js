@@ -20,25 +20,26 @@ async function attendancePercent(studentId,classId,maxDays) {
 }
 
 function summarize(rows,method='average_percentage') {
-  const usable=rows.filter(r=>r.verification_status!=='pending'&&r.verification_status!=='rejected');
-  const scored=usable.filter(r=>r.raw_score!==null&&r.raw_score!==undefined);
-  if(!rows.length||!usable.length||scored.length<usable.length||!scored.length)return {percent:null,complete:false};
+  const pending=rows.filter(r=>r.verification_status==='pending'||r.verification_status==='rejected');
+  const eligible=rows.filter(r=>r.verification_status!=='pending'&&r.verification_status!=='rejected');
+  const scored=eligible.filter(r=>r.raw_score!==null&&r.raw_score!==undefined);
+  if(!rows.length||pending.length||scored.length<eligible.length||!scored.length)return {percent:null,complete:false};
   if(scored.some(r=>Number(r.max_score)<=0||Number(r.raw_score)<0||Number(r.raw_score)>Number(r.max_score)))return {percent:null,complete:false,invalidScore:true};
   if(method==='points_total'){const raw=scored.reduce((s,r)=>s+Number(r.raw_score),0),max=scored.reduce((s,r)=>s+Number(r.max_score),0);return {percent:(raw/max)*100,complete:true,earned:raw,max};}
   return {percent:scored.reduce((s,r)=>s+(Number(r.raw_score)/Number(r.max_score))*100,0)/scored.length,complete:true};
 }
 
 async function assessmentRows(studentId,classId,sourceType,sourceFilter=null){
-  if(sourceType==='quiz')return (await pool.query(`SELECT s.raw_score,q.total_items max_score,s.verification_status,NULL::text source_filter FROM quiz_scores s JOIN quizzes q ON q.id=s.quiz_id WHERE q.class_id=$1 AND s.student_id=$2`,[classId,studentId])).rows;
-  if(sourceType==='performance')return (await pool.query(`SELECT s.raw_score,p.max_score,s.verification_status,NULL::text source_filter FROM performance_scores s JOIN performance_tasks p ON p.id=s.task_id WHERE p.class_id=$1 AND s.student_id=$2`,[classId,studentId])).rows;
-  if(sourceType==='exam'){const rows=(await pool.query(`SELECT s.raw_score,e.max_score,s.verification_status,e.exam_type source_filter FROM exam_scores s JOIN examinations e ON e.id=s.exam_id WHERE e.class_id=$1 AND s.student_id=$2`,[classId,studentId])).rows;return sourceFilter?rows.filter(r=>String(r.source_filter||'').toLowerCase()===String(sourceFilter).toLowerCase()):rows;}
-  if(sourceType==='custom')return (await pool.query(`SELECT s.raw_score,a.max_score,s.verification_status,COALESCE(a.subcomponent_id::text,'') source_filter FROM custom_assessment_scores s JOIN custom_assessments a ON a.id=s.assessment_id WHERE a.class_id=$1 AND a.component_id=$2 AND s.student_id=$3`,[classId,sourceFilter.componentId,studentId])).rows;
+  if(sourceType==='quiz')return (await pool.query(`SELECT s.raw_score,q.total_items max_score,s.verification_status,NULL::text source_filter FROM quizzes q LEFT JOIN quiz_scores s ON s.quiz_id=q.id AND s.student_id=$2 WHERE q.class_id=$1`,[classId,studentId])).rows;
+  if(sourceType==='performance')return (await pool.query(`SELECT s.raw_score,p.max_score,s.verification_status,NULL::text source_filter FROM performance_tasks p LEFT JOIN performance_scores s ON s.task_id=p.id AND s.student_id=$2 WHERE p.class_id=$1`,[classId,studentId])).rows;
+  if(sourceType==='exam'){const rows=(await pool.query(`SELECT s.raw_score,e.max_score,s.verification_status,e.exam_type source_filter FROM examinations e LEFT JOIN exam_scores s ON s.exam_id=e.id AND s.student_id=$2 WHERE e.class_id=$1`,[classId,studentId])).rows;return sourceFilter?rows.filter(r=>String(r.source_filter||'').toLowerCase()===String(sourceFilter).toLowerCase()):rows;}
+  if(sourceType==='custom')return (await pool.query(`SELECT s.raw_score,a.max_score,s.verification_status,COALESCE(a.subcomponent_id::text,'') source_filter FROM custom_assessments a LEFT JOIN custom_assessment_scores s ON s.assessment_id=a.id AND s.student_id=$3 WHERE a.class_id=$1 AND a.component_id=$2`,[classId,sourceFilter.componentId,studentId])).rows;
   return [];
 }
 
 async function componentResult(studentId,classId,c){
   if(c.source_type==='attendance')return attendancePercent(studentId,classId,c.max_points);
-  if(c.subcomponents&&c.subcomponents.length){let pct=0;for(const sub of c.subcomponents){let rows;if(c.source_type==='custom')rows=(await pool.query(`SELECT s.raw_score,a.max_score,s.verification_status FROM custom_assessment_scores s JOIN custom_assessments a ON a.id=s.assessment_id WHERE a.class_id=$1 AND a.component_id=$2 AND a.subcomponent_id=$3 AND s.student_id=$4`,[classId,c.id,sub.id,studentId])).rows;else rows=await assessmentRows(studentId,classId,c.source_type,sub.source_filter||sub.name);const r=summarize(rows,c.calculation_method);if(!r.complete||r.percent===null)return r;pct+=r.percent*Number(sub.weight_share)/100;}return {percent:pct,complete:true};}
+  if(c.subcomponents&&c.subcomponents.length){let pct=0;for(const sub of c.subcomponents){let rows;if(c.source_type==='custom')rows=(await pool.query(`SELECT s.raw_score,a.max_score,s.verification_status FROM custom_assessments a LEFT JOIN custom_assessment_scores s ON s.assessment_id=a.id AND s.student_id=$4 WHERE a.class_id=$1 AND a.component_id=$2 AND a.subcomponent_id=$3`,[classId,c.id,sub.id,studentId])).rows;else rows=await assessmentRows(studentId,classId,c.source_type,sub.source_filter||sub.name);const r=summarize(rows,c.calculation_method);if(!r.complete||r.percent===null)return r;pct+=r.percent*Number(sub.weight_share)/100;}return {percent:pct,complete:true};}
   const rows=c.source_type==='custom'?await assessmentRows(studentId,classId,'custom',{componentId:c.id}):await assessmentRows(studentId,classId,c.source_type);return summarize(rows,c.calculation_method);
 }
 
