@@ -55,7 +55,6 @@ async function getOrCreateCurrentTerm() {
       SELECT *
       FROM academic_terms
       WHERE is_current = TRUE
-      ORDER BY created_at DESC
       LIMIT 1
       `
     );
