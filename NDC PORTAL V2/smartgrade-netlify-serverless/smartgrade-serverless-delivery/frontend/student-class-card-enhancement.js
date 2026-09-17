@@ -27,8 +27,12 @@
   #student-section .sg-student-card-components>div:nth-child(4){background:linear-gradient(90deg,rgba(237,233,254,.74),rgba(255,255,255,.70))}
   #student-section .sg-student-card-grade{margin-top:12px;padding-top:2px}
   #student-section .sg-student-card-grade>div{border-radius:13px;padding:10px 12px;background:rgba(255,247,237,.78);border:1px solid rgba(253,186,116,.42)}
-  #student-section .sg-grade-equivalent-box{margin:12px 0 0!important;border-radius:14px!important;background:linear-gradient(135deg,rgba(219,234,254,.84),rgba(237,233,254,.72))!important;border:1px solid rgba(129,140,248,.35)!important}
-  @media(max-width:640px){#student-section .sg-student-classes-heading{padding:15px 16px!important;border-radius:17px}#student-section .sg-student-card-head{padding:17px 16px!important}#student-section .sg-student-card-body{padding:14px 15px 17px}#student-section .sg-student-card-head>div{max-width:75%}}
+  #student-section .sg-grade-equivalent-box{margin:12px 0 0!important;padding:14px 16px!important;border-radius:16px!important;background:linear-gradient(135deg,rgba(219,234,254,.92),rgba(237,233,254,.82))!important;border:1px solid rgba(99,102,241,.42)!important;box-shadow:0 10px 24px rgba(37,99,235,.10),inset 0 1px 0 rgba(255,255,255,.72)}
+  #student-section .sg-grade-equivalent-box>div>p:first-child{font-size:.66rem!important;font-weight:900!important;letter-spacing:.08em!important;color:#64748b!important}
+  #student-section .sg-grade-equivalent-box>div>p:last-child{font-size:2rem!important;line-height:1!important;font-weight:950!important;letter-spacing:-.045em!important;color:#173fa8!important;text-shadow:0 2px 10px rgba(37,99,235,.12)}
+  #student-section .sg-grade-equivalent-box>span{padding:6px 11px!important;font-size:.7rem!important;font-weight:900!important;box-shadow:0 5px 14px rgba(16,185,129,.12)}
+  #student-section .sg-student-card-grade .text-2xl{font-size:1.35rem!important;line-height:1.25!important}
+  @media(max-width:640px){#student-section .sg-student-classes-heading{padding:15px 16px!important;border-radius:17px}#student-section .sg-student-card-head{padding:17px 16px!important}#student-section .sg-student-card-body{padding:14px 15px 17px}#student-section .sg-student-card-head>div{max-width:75%}#student-section .sg-grade-equivalent-box>div>p:last-child{font-size:1.75rem!important}}
   `;
   document.head.appendChild(css);
 
@@ -39,16 +43,12 @@
       html=html.replace(/<div class="glass-card sg-student-class-card rounded-2xl p-5">/, '<div class="glass-card sg-student-class-card rounded-2xl p-5">');
       html=html.replace(/(<div class="glass-card sg-student-class-card[^>]*>\s*)(<div class="flex justify-between items-start">)/, '$1<div class="sg-student-card-head">$2');
       html=html.replace(/(<div class="mt-3">\s*[^]*?<\/div>\s*)(?=<div|$)/, '$1');
-      // Close the injected header immediately before the component list.
       html=html.replace(/(\s*<div class="mt-3">)/, '</div><div class="sg-student-card-body"><div class="sg-student-card-components">');
-      // The original component wrapper closes once after all component rows.
-      // Rename its closing context by inserting the body grade wrapper before gradeBlock.
       const gradeMarkers=['mt-2 text-2xl font-black text-emerald-700','mt-2 text-sm text-amber-700 font-semibold','mt-2 text-sm text-red-600 font-semibold'];
       for(const marker of gradeMarkers){
         const needle=`<div\n          class="${marker}"`;
         if(html.includes(needle)){html=html.replace(needle,`</div><div class="sg-student-card-grade"><div\n          class="${marker}"`);break;}
       }
-      // Close body/grade wrappers before the card's final closing tag.
       html=html.replace(/<\/div>\s*$/, '</div></div></div>');
       return html;
     };
