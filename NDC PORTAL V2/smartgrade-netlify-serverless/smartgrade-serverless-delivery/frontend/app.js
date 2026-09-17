@@ -4335,19 +4335,14 @@ const Teacher = {
           class="font-semibold"
         >
 
-          ${esc(
-            r.last_name ||
-            r.s_last ||
-            ''
-          )}
-
-          ,
-
-          ${esc(
-            r.first_name ||
-            r.s_first ||
-            ''
-          )}
+${esc(
+  r.studentName ||
+  (
+    (r.last_name || r.s_last || '') +
+    ', ' +
+    (r.first_name || r.s_first || '')
+  )
+)}
 
         </td>
 
