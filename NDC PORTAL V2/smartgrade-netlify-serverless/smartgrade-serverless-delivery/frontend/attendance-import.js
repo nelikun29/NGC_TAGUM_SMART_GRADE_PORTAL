@@ -16,6 +16,7 @@
       await loadScript('./teacher-grading-controls.js');
       await loadScript('./dynamic-grading-ui.js');
       await loadScript('./admin-role-correction.js');
+      await loadScript('./quiz-create-fix.js');
       await loadScript('./reference-dashboard-theme.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.
       if (typeof Teacher !== 'undefined' && Teacher.state?.classId && Store?.user?.role === 'teacher') {
