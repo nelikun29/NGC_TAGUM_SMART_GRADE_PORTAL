@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { JWT_SECRET, authenticate } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
@@ -12,24 +11,6 @@ const router = express.Router();
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
-
-function netlifyClientKey(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
-  const nfIp = req.headers['x-nf-client-connection-ip'];
-  if (typeof nfIp === 'string' && nfIp.trim()) return nfIp.trim();
-  return 'netlify-client';
-}
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { ip: false },
-  keyGenerator: netlifyClientKey,
-  message: { error: 'Too many login attempts. Please try again later.' },
-});
 
 function signToken(user) {
   return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
@@ -121,7 +102,11 @@ router.post('/register/teacher', async (req, res, next) => {
 });
 
 // ---------- LOGIN ----------
-router.post('/login', loginLimiter, async (req, res, next) => {
+// The API already has a Netlify-compatible global request limiter. Login also
+// enforces a persistent per-account 5-attempt/15-minute lockout below, so a
+// second express-rate-limit middleware here is redundant and can fail before
+// the route handler executes in the Netlify serverless request environment.
+router.post('/login', async (req, res, next) => {
   let stage = 'validate_request';
   try {
     const { email, password } = req.body || {};
@@ -179,8 +164,6 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
   } catch (e) {
-    // Keep credentials and database details out of logs. The stage marker is
-    // sufficient to isolate serverless login failures during staging.
     console.error(`[auth/login] stage=${stage}`, e && e.stack ? e.stack : e);
     next(e);
   }
