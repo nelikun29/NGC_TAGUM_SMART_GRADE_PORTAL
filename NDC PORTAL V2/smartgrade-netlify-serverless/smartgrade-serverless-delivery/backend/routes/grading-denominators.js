@@ -11,7 +11,8 @@ async function configuredTotals(classId){
   const quiz=Number((await pool.query('SELECT COALESCE(SUM(total_items),0) n FROM quizzes WHERE class_id=$1',[classId])).rows[0].n);
   const performance=Number((await pool.query('SELECT COALESCE(SUM(max_score),0) n FROM performance_tasks WHERE class_id=$1',[classId])).rows[0].n);
   const exams=(await pool.query(`SELECT exam_type,COALESCE(SUM(max_score),0) n FROM examinations WHERE class_id=$1 GROUP BY exam_type`,[classId])).rows;
-  return {quiz,performance,exams:Object.fromEntries(exams.map(r=>[String(r.exam_type||'').toLowerCase(),Number(r.n)]))};
+  let custom={};try{const rows=(await pool.query(`SELECT component_id,COALESCE(SUM(max_score),0) n FROM custom_assessments WHERE class_id=$1 GROUP BY component_id`,[classId])).rows;custom=Object.fromEntries(rows.map(r=>[r.component_id,Number(r.n)]));}catch(e){if(e.code!=='42P01')throw e;}
+  return {quiz,performance,exams:Object.fromEntries(exams.map(r=>[String(r.exam_type||'').toLowerCase(),Number(r.n)])),custom};
 }
 router.get('/:classId',requireClassOwnership,async(req,res,next)=>{try{
   const scheme=await schemeFor(req.params.classId);if(!scheme)return res.status(404).json({error:'Grading scheme not found.'});
@@ -27,9 +28,9 @@ router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,asyn
   await client.query('BEGIN');
   for(const item of items){
     const c=(await client.query('SELECT * FROM grading_components WHERE id=$1 AND scheme_id=$2',[item.id,scheme.id])).rows[0];if(!c)continue;
-    if(['quiz','performance'].includes(c.source_type)){
+    if(['quiz','performance','custom'].includes(c.source_type)){
       const denominator=num(item.maxPoints);if(denominator!==null&&(!Number.isFinite(denominator)||denominator<=0)){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name} Overall Total Score must be greater than 0.`});}
-      const used=c.source_type==='quiz'?totals.quiz:totals.performance;if(denominator!==null&&used>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name}: configured assessments total ${used} points, which exceeds the proposed overall total of ${denominator}.`});}
+      const used=c.source_type==='quiz'?totals.quiz:c.source_type==='performance'?totals.performance:Number(totals.custom?.[c.id]||0);if(denominator!==null&&used>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name}: configured assessments total ${used} points, which exceeds the proposed overall total of ${denominator}.`});}
       await client.query('UPDATE grading_components SET max_points=$1,calculation_method=$2,updated_at=now() WHERE id=$3',[denominator,denominator===null?'average_percentage':'points_total',c.id]);
     }
     if(c.source_type==='exam')for(const sub of item.subcomponents||[]){
