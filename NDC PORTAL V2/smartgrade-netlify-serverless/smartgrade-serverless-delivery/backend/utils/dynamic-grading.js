@@ -28,14 +28,19 @@ function summarize(rows,method='average_percentage',fixedDenominator=null) {
 
   const denominator=Number(fixedDenominator);
   if(Number.isFinite(denominator)&&denominator>0){
+    // The configured denominator is the teacher's authoritative overall total.
+    // Newly-created assessments without a learner score must not erase already
+    // earned raw totals or turn an existing percentage into "Score pending".
     const configuredMax=rows.reduce((s,r)=>s+(Number(r.max_score)||0),0);
-    if(configuredMax>denominator+0.0001)return {percent:null,complete:false,configurationError:`Configured assessment maximum (${configuredMax}) exceeds the Overall Total Score (${denominator}).`,earned:scored.reduce((s,r)=>s+Number(r.raw_score),0),max:denominator,configuredMax};
     const earned=scored.reduce((s,r)=>s+Number(r.raw_score),0);
     if(earned>denominator+0.0001)return {percent:null,complete:false,configurationError:`Earned points (${earned}) exceed the Overall Total Score (${denominator}).`,earned,max:denominator,configuredMax};
     return {percent:(earned/denominator)*100,complete:true,earned,max:denominator,configuredMax};
   }
 
-  if(!rows.length||scored.length<eligible.length||!scored.length)return {percent:null,complete:false};
+  // For ordinary assessment aggregation, calculate from assessments that
+  // actually have a learner score. An unscored newly-created Quiz/PT/Exam is
+  // not a grading error and must not invalidate earlier recorded scores.
+  if(!scored.length)return {percent:null,complete:false};
   const raw=scored.reduce((s,r)=>s+Number(r.raw_score),0);
   const max=scored.reduce((s,r)=>s+Number(r.max_score),0);
   if(method==='points_total')return {percent:(raw/max)*100,complete:true,earned:raw,max};
