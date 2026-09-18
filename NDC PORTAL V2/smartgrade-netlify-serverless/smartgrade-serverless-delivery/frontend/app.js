@@ -49,6 +49,36 @@ const Store = {
   },
 };
 
+const AttendanceQr = {
+  key: 'sg_pending_attendance_qr',
+  captureFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('attendanceSession');
+    const token = params.get('attendanceToken');
+    if (!sid || !token) return;
+    sessionStorage.setItem(this.key, JSON.stringify({ sessionId: sid, token }));
+    history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+  },
+  getPending() {
+    try { return JSON.parse(sessionStorage.getItem(this.key)); } catch { return null; }
+  },
+  clear() { sessionStorage.removeItem(this.key); },
+  async submitPending() {
+    const pending = this.getPending();
+    if (!pending || Store.user?.role !== 'student' || !Store.token) return false;
+    try {
+      const data = await api('POST', '/attendance/submit-qr', pending);
+      this.clear();
+      Toast.show('Attendance Recorded', data.message || 'Your attendance has been recorded.', 'success');
+      return true;
+    } catch (e) {
+      if (e?.status === 409 || e?.status === 410 || e?.status === 403 || e?.status === 404) this.clear();
+      return false;
+    }
+  }
+};
+AttendanceQr.captureFromUrl();
+
 
 async function api(method, path, body) {
 
@@ -849,6 +879,8 @@ const Auth = {
 
       Views.renderForRole();
 
+      if (data.user.role === 'student') setTimeout(() => AttendanceQr.submitPending(), 250);
+
 
       // Immediately refresh notifications.
 
@@ -1411,7 +1443,11 @@ const Student = {
     }
 
 
+    const pendingQr = AttendanceQr.getPending();
+
     el.innerHTML = `
+
+      ${pendingQr ? `<div class="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><div class="font-black text-slate-800"><i class="fa-solid fa-qrcode text-amber-600 mr-2"></i>QR Attendance Detected</div><p class="text-xs text-slate-600 mt-1">Submit this attendance check-in while the QR credential is still valid.</p></div><button onclick="Student.submitPendingQr()" class="bg-slate-900 text-amber-300 px-4 py-2 rounded-xl text-sm font-black">Record Attendance</button></div>` : ''}
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -1843,6 +1879,12 @@ const Student = {
 
     return false;
 
+  },
+
+
+  async submitPendingQr() {
+    const ok = await AttendanceQr.submitPending();
+    if (ok) Student.render();
   },
 
 
@@ -5321,7 +5363,12 @@ ${esc(
       const target = document.getElementById('attendance-qr-canvas');
       if (!target || typeof QRCode === 'undefined') return Toast.show('QR unavailable','QR renderer failed to load. Attendance Code remains available.','error');
       target.innerHTML = '';
-      const payload = JSON.stringify({ v: 1, sid: data.sessionId, t: data.token });
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.hash = '';
+      url.searchParams.set('attendanceSession', data.sessionId);
+      url.searchParams.set('attendanceToken', data.token);
+      const payload = url.toString();
       new QRCode(target, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
       let remaining = Number(data.expiresInSeconds || 60);
       const countdown = document.getElementById('attendance-qr-countdown');
