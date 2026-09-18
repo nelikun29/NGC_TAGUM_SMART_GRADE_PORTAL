@@ -23,6 +23,7 @@
       await loadScript('./teacher-class-card-enhancement.js');
       await loadScript('./gradebook-raw-data.js');
       await loadScript('./gradebook-finalize-all.js');
+      await loadScript('./manual-grade-adjustments.js');
       await loadScript('./teacher-student-name-format.js');
       await loadScript('./unfinalize-workflow.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.
