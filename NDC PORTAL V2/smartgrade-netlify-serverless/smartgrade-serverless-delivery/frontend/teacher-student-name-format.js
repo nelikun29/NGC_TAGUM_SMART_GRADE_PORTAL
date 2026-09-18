@@ -8,7 +8,8 @@
   style.textContent=`
     #teacher-grade-table tbody td:first-child,
     #teacher-tab-content [data-sg-student-name],
-    #teacher-tab-content .sg-attendance-roster-name{
+    #teacher-tab-content .sg-attendance-roster-name,
+    #teacher-tab-content .space-y-2 > div > span.font-semibold.text-sm{
       text-transform:uppercase!important;
       letter-spacing:.012em;
     }
