@@ -204,7 +204,7 @@ router.post('/login', async (req, res, next) => {
     console.error('Stage:', stage);
     console.error('Message:', e && e.message ? e.message : e);
     console.error('Stack:', e && e.stack ? e.stack : e);
-    return res.status(500).json({ error: 'Unable to complete login. Please try again.' });
+    return res.status(500).json({ error: 'Unable to complete login. Please try again.', diagnosticStage: stage });
   }
 });
 
