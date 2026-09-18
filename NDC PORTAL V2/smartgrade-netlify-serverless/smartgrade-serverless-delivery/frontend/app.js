@@ -72,7 +72,8 @@ const AttendanceQr = {
       Toast.show('Attendance Recorded', data.message || 'Your attendance has been recorded.', 'success');
       return true;
     } catch (e) {
-      if (e?.status === 409 || e?.status === 410 || e?.status === 403 || e?.status === 404) this.clear();
+      const message = String(e?.message || '');
+      if (/already been recorded|expired|closed|not enrolled|not found|finalized|released/i.test(message)) this.clear();
       return false;
     }
   }
@@ -5240,6 +5241,8 @@ ${esc(
     sessionId
   ) {
 
+    if (Teacher._attendanceQrTimer) { clearInterval(Teacher._attendanceQrTimer); Teacher._attendanceQrTimer = null; }
+
     const box =
       document.getElementById(
         'teacher-tab-content'
@@ -5387,6 +5390,7 @@ ${esc(
   },
 
   async closeAttendanceSession(sessionId) {
+    if (Teacher._attendanceQrTimer) { clearInterval(Teacher._attendanceQrTimer); Teacher._attendanceQrTimer = null; }
     try {
       await api('POST', `/attendance/sessions/${sessionId}/close`);
       Toast.show('Closed', 'Attendance session closed.', 'success');
