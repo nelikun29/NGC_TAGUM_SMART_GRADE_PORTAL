@@ -28,6 +28,11 @@ router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,asyn
   const totals=await configuredTotals(req.params.classId,client);const items=Array.isArray(req.body.components)?req.body.components:[];
   for(const item of items){
     const c=(await client.query('SELECT * FROM grading_components WHERE id=$1 AND scheme_id=$2',[item.id,scheme.id])).rows[0];if(!c)continue;
+    if(c.source_type==='attendance'){
+      const denominator=num(item.maxPoints);if(denominator===null||!Number.isFinite(denominator)||denominator<=0||!Number.isInteger(denominator)){await client.query('ROLLBACK');return res.status(400).json({error:'Attendance Total Required Days must be a positive whole number.'});}
+      const highest=Number((await client.query(`SELECT COALESCE(MAX(points),0) n FROM (SELECT ar.student_id,SUM(CASE WHEN ar.status='present' THEN 1 WHEN ar.status='late' THEN .75 ELSE 0 END) points FROM attendance_sessions s JOIN attendance_records ar ON ar.session_id=s.id WHERE s.class_id=$1 GROUP BY ar.student_id) x`,[req.params.classId])).rows[0].n);if(highest>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`Attendance Total Required Days cannot be lower than the highest recorded attendance (${highest}).`});}
+      await client.query('UPDATE grading_components SET max_points=$1,updated_at=now() WHERE id=$2',[denominator,c.id]);
+    }
     if(['quiz','performance','custom'].includes(c.source_type)){
       const denominator=num(item.maxPoints);if(denominator!==null&&(!Number.isFinite(denominator)||denominator<=0)){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name} Overall Total Score must be greater than 0.`});}
       const used=c.source_type==='quiz'?totals.quiz:c.source_type==='performance'?totals.performance:Number(totals.custom?.[c.id]||0);if(denominator!==null&&used>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name}: configured assessments total ${used} points, which exceeds the proposed overall total of ${denominator}.`});}
