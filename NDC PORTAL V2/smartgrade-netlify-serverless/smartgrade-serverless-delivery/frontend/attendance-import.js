@@ -15,7 +15,7 @@
     try {
       await loadScript('./teacher-grading-controls.js');
       await loadScript('./dynamic-grading-ui.js');
-      await loadScript('./grading-denominators-ui.js');
+      // Assessment denominators are now configured exclusively in the Weights editor.
       await loadScript('./admin-role-correction.js');
       await loadScript('./quiz-create-fix.js');
       await loadScript('./reference-dashboard-theme.js');
@@ -23,6 +23,7 @@
       await loadScript('./teacher-class-card-enhancement.js');
       await loadScript('./gradebook-raw-data.js');
       await loadScript('./gradebook-finalize-all.js');
+      await loadScript('./manual-grade-adjustments.js');
       await loadScript('./teacher-student-name-format.js');
       await loadScript('./unfinalize-workflow.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.

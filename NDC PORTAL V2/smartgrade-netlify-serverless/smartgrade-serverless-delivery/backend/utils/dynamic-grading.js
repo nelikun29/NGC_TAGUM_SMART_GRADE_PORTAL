@@ -59,7 +59,7 @@ async function componentResult(studentId,classId,c){
       if(!Number.isFinite(share)||share<=0)continue;
       hasContributingSubcomponent=true;
       let rows;if(c.source_type==='custom')rows=(await pool.query(`SELECT s.raw_score,a.max_score,s.verification_status FROM custom_assessments a LEFT JOIN custom_assessment_scores s ON s.assessment_id=a.id AND s.student_id=$4 WHERE a.class_id=$1 AND a.component_id=$2 AND a.subcomponent_id=$3`,[classId,c.id,sub.id,studentId])).rows;else rows=await assessmentRows(studentId,classId,c.source_type,sub.source_filter||sub.name);
-      const fixed=c.source_type==='exam'?sub.max_points:null;
+      const fixed=null;
       const r=summarize(rows,c.calculation_method,fixed);if(!r.complete||r.percent===null)return r;
       pct+=r.percent*share/componentWeight;if(r.earned!=null)earned+=Number(r.earned);if(r.max!=null)max+=Number(r.max);
     }
@@ -67,7 +67,7 @@ async function componentResult(studentId,classId,c){
     return {percent:pct,complete:true,earned:max?earned:undefined,max:max||undefined};
   }
   const rows=c.source_type==='custom'?await assessmentRows(studentId,classId,'custom',{componentId:c.id}):await assessmentRows(studentId,classId,c.source_type);
-  const fixed=['quiz','performance','custom'].includes(c.source_type)?c.max_points:null;
+  const fixed=['quiz','performance','exam','custom'].includes(c.source_type)?c.max_points:null;
   return summarize(rows,c.calculation_method,fixed);
 }
 
@@ -75,9 +75,14 @@ async function computeDynamicClassGrade(studentId,classId){
   const scheme=await getDynamicScheme(classId);if(!scheme)return null;
   const totalWeight=scheme.components.reduce((s,c)=>s+Number(c.weight),0);if(Math.abs(totalWeight-100)>0.01)return {complete:false,status:'configuration_error',missing:[],components:{},finalGrade:null,message:`Grading scheme weights total ${totalWeight}%, not 100%.`};
   const components={},missing=[];let finalGrade=0;let firstConfigurationError=null;
+  const adjustmentRows=(await pool.query(`SELECT component,adjustment_points FROM grade_adjustments WHERE student_id=$1 AND class_id=$2`,[studentId,classId])).rows;
+  const adjustments=Object.fromEntries(adjustmentRows.map(a=>[a.component,Number(a.adjustment_points)]));
   for(const c of scheme.components){
     const r=await componentResult(studentId,classId,c);
-    components[c.component_key]={name:c.name,percent:r.percent,weight:Number(c.weight),available:r.complete&&r.percent!==null,adjusted:false,earned:r.earned,max:r.max,configuredMax:r.configuredMax};
+    const adjustmentKey=['attendance','quiz','performance','exam','custom'].includes(c.source_type)?c.component_key:null;
+    const adjustment=adjustmentKey&&Number.isFinite(adjustments[adjustmentKey])?adjustments[adjustmentKey]:0;
+    if(adjustment&&r.percent!==null&&r.percent!==undefined){r.percent=Math.max(0,Math.min(100,Number(r.percent)+adjustment));if(r.earned!=null&&r.max!=null)r.earned=Math.max(0,Math.min(Number(r.max),Number(r.earned)+(adjustment/100)*Number(r.max)));}
+    components[c.component_key]={name:c.name,percent:r.percent,weight:Number(c.weight),available:r.complete&&r.percent!==null,adjusted:!!adjustment,earned:r.earned,max:r.max,configuredMax:r.configuredMax};
     if(r.configurationError&&!firstConfigurationError)firstConfigurationError=`${c.name}: ${r.configurationError}`;
     if(Number(c.weight)>0&&(!r.complete||r.percent===null))missing.push(c.component_key);else if(Number(c.weight)>0)finalGrade+=r.percent*Number(c.weight)/100;
   }
@@ -85,4 +90,4 @@ async function computeDynamicClassGrade(studentId,classId){
   if(missing.length)return {complete:false,status:firstConfigurationError?'configuration_error':(status?status.status:'in_progress'),missing,components,finalGrade:null,message:firstConfigurationError||`Grade Incomplete — ${missing.map(k=>components[k]?.name||k).join(', ')} score/configuration pending.`,schemeId:scheme.id,schemeVersion:scheme.version};
   return {complete:true,status:status?status.status:'computed',missing:[],components,finalGrade:Math.round(finalGrade*100)/100,message:null,schemeId:scheme.id,schemeVersion:scheme.version};
 }
-module.exports={getDynamicScheme,computeDynamicClassGrade};
+module.exports={getDynamicScheme,computeDynamicClassGrade,componentResult};

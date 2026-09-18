@@ -49,6 +49,37 @@ const Store = {
   },
 };
 
+const AttendanceQr = {
+  key: 'sg_pending_attendance_qr',
+  captureFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('attendanceSession');
+    const token = params.get('attendanceToken');
+    if (!sid || !token) return;
+    sessionStorage.setItem(this.key, JSON.stringify({ sessionId: sid, token }));
+    history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+  },
+  getPending() {
+    try { return JSON.parse(sessionStorage.getItem(this.key)); } catch { return null; }
+  },
+  clear() { sessionStorage.removeItem(this.key); },
+  async submitPending() {
+    const pending = this.getPending();
+    if (!pending || Store.user?.role !== 'student' || !Store.token) return false;
+    try {
+      const data = await api('POST', '/attendance/submit-qr', pending);
+      this.clear();
+      Toast.show('Attendance Recorded', data.message || 'Your attendance has been recorded.', 'success');
+      return true;
+    } catch (e) {
+      const message = String(e?.message || '');
+      if (/already been recorded|expired|closed|not enrolled|not found|finalized|released/i.test(message)) this.clear();
+      return false;
+    }
+  }
+};
+AttendanceQr.captureFromUrl();
+
 
 async function api(method, path, body) {
 
@@ -93,7 +124,7 @@ async function api(method, path, body) {
 
   if (!res.ok) {
 
-    const message =
+    let message =
       (data && data.error) ||
       'An unexpected error occurred.';
 
@@ -260,6 +291,8 @@ const ApprovalManager = {
     adminPending: 0,
 
     teacherPending: 0,
+
+    unfinalizePending: 0,
 
     loading: false,
 
@@ -486,6 +519,7 @@ const ApprovalManager = {
       this.state.adminPending = 0;
 
       this.state.teacherPending = 0;
+      this.state.unfinalizePending = 0;
 
       this.updateBadge(0);
 
@@ -522,6 +556,8 @@ const ApprovalManager = {
 
 
         this.state.teacherPending = 0;
+        const unfinalizeRows = await api('GET','/admin/unfinalize-requests?status=pending').catch(() => []);
+        this.state.unfinalizePending = Array.isArray(unfinalizeRows) ? unfinalizeRows.length : 0;
 
       }
 
@@ -569,6 +605,7 @@ const ApprovalManager = {
           total;
 
         this.state.adminPending = 0;
+        this.state.unfinalizePending = 0;
 
       }
 
@@ -582,13 +619,15 @@ const ApprovalManager = {
         this.state.adminPending = 0;
 
         this.state.teacherPending = 0;
+        this.state.unfinalizePending = 0;
 
       }
 
 
       const total =
         this.state.adminPending +
-        this.state.teacherPending;
+        this.state.teacherPending +
+        this.state.unfinalizePending;
 
 
       this.updateBadge(total);
@@ -653,6 +692,14 @@ const ApprovalManager = {
     }
 
 
+    const unfinalizeTab = document.querySelector('#admin-section [data-admin-unfinalize]');
+    if (unfinalizeTab) {
+      let badge=unfinalizeTab.querySelector('.sg-unfinalize-count');
+      if(!badge){badge=document.createElement('span');badge.className='sg-unfinalize-count ml-1 inline-flex min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-black items-center justify-center';unfinalizeTab.appendChild(badge);}
+      badge.textContent=this.state.unfinalizePending;
+      badge.classList.toggle('hidden',this.state.unfinalizePending===0);
+    }
+
     const genericCount =
       document.getElementById(
         'approval-count'
@@ -663,7 +710,8 @@ const ApprovalManager = {
 
       const total =
         this.state.adminPending +
-        this.state.teacherPending;
+        this.state.teacherPending +
+        this.state.unfinalizePending;
 
 
       genericCount.textContent =
@@ -695,11 +743,10 @@ const ApprovalManager = {
 
     if (
       user.role === 'admin' &&
-      this.state.adminPending > 0
+      (this.state.adminPending > 0 || this.state.unfinalizePending > 0)
     ) {
 
-      Admin.tab =
-        'approvals';
+      Admin.tab = this.state.adminPending > 0 ? 'approvals' : 'unfinalize';
 
       Views.renderForRole();
 
@@ -832,6 +879,8 @@ const Auth = {
 
 
       Views.renderForRole();
+
+      if (data.user.role === 'student') setTimeout(() => AttendanceQr.submitPending(), 250);
 
 
       // Immediately refresh notifications.
@@ -1395,7 +1444,11 @@ const Student = {
     }
 
 
+    const pendingQr = AttendanceQr.getPending();
+
     el.innerHTML = `
+
+      ${pendingQr ? `<div class="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><div class="font-black text-slate-800"><i class="fa-solid fa-qrcode text-amber-600 mr-2"></i>QR Attendance Detected</div><p class="text-xs text-slate-600 mt-1">Submit this attendance check-in while the QR credential is still valid.</p></div><button onclick="Student.submitPendingQr()" class="bg-slate-900 text-amber-300 px-4 py-2 rounded-xl text-sm font-black">Record Attendance</button></div>` : ''}
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -1493,6 +1546,11 @@ const Student = {
               </button>
 
             </form>
+
+            <button type="button" onclick="Student.openQrScanner()" class="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-amber-300 text-sm font-black hover:bg-slate-800 transition shadow-sm">
+              <i class="fa-solid fa-camera"></i>
+              Scan QR Code
+            </button>
 
           </div>
 
@@ -1827,6 +1885,76 @@ const Student = {
 
     return false;
 
+  },
+
+
+  async openQrScanner() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      Toast.show('Camera Unavailable', 'This browser does not support camera scanning. You can still enter the Attendance Code.', 'error');
+      return;
+    }
+    if (typeof jsQR === 'undefined') {
+      Toast.show('Scanner Unavailable', 'QR scanner failed to load. You can still enter the Attendance Code.', 'error');
+      return;
+    }
+    Student.closeQrScanner();
+    const host = document.createElement('div');
+    host.id = 'student-qr-scanner-modal';
+    host.className = 'fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4';
+    host.innerHTML = `<div class="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"><div class="flex items-center justify-between px-5 py-4 border-b"><div><h3 class="font-black text-lg text-slate-800"><i class="fa-solid fa-qrcode text-amber-500 mr-2"></i>Scan Attendance QR</h3><p class="text-xs text-slate-500 mt-1">Point your camera at the QR code shown by your teacher.</p></div><button type="button" onclick="Student.closeQrScanner()" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button></div><div class="p-4"><div class="relative overflow-hidden rounded-2xl bg-black aspect-square"><video id="student-qr-video" playsinline muted class="w-full h-full object-cover"></video><div class="absolute inset-[12%] border-2 border-amber-300 rounded-2xl pointer-events-none"></div></div><p id="student-qr-status" class="mt-3 text-center text-xs font-bold text-slate-500">Starting camera…</p><button type="button" onclick="Student.closeQrScanner()" class="mt-3 w-full px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold">Cancel</button></div></div>`;
+    document.body.appendChild(host);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      Student._qrStream = stream;
+      const video = document.getElementById('student-qr-video');
+      if (!video) return Student.closeQrScanner();
+      video.srcObject = stream;
+      await video.play();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const scan = () => {
+        if (!Student._qrStream || !document.getElementById('student-qr-scanner-modal')) return;
+        if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+          if (code?.data) return Student.handleScannedAttendanceQr(code.data);
+        }
+        Student._qrFrame = requestAnimationFrame(scan);
+      };
+      document.getElementById('student-qr-status').textContent = 'Ready — align the teacher QR inside the frame.';
+      Student._qrFrame = requestAnimationFrame(scan);
+    } catch (e) {
+      Student.closeQrScanner();
+      Toast.show('Camera Permission Required', 'Allow camera access to scan the QR code. You can still use the Attendance Code.', 'error');
+    }
+  },
+
+  closeQrScanner() {
+    if (Student._qrFrame) cancelAnimationFrame(Student._qrFrame);
+    Student._qrFrame = null;
+    if (Student._qrStream) Student._qrStream.getTracks().forEach(t => t.stop());
+    Student._qrStream = null;
+    document.getElementById('student-qr-scanner-modal')?.remove();
+  },
+
+  async handleScannedAttendanceQr(raw) {
+    let url;
+    try { url = new URL(raw); } catch { Toast.show('Invalid QR Code', 'This is not a Smart Grade attendance QR code.', 'error'); return; }
+    if (url.origin !== window.location.origin) { Toast.show('Invalid QR Code', 'This QR code does not belong to this portal.', 'error'); return; }
+    const sessionId = url.searchParams.get('attendanceSession');
+    const token = url.searchParams.get('attendanceToken');
+    if (!sessionId || !token) { Toast.show('Invalid QR Code', 'This QR code is not a valid attendance credential.', 'error'); return; }
+    Student.closeQrScanner();
+    sessionStorage.setItem(AttendanceQr.key, JSON.stringify({ sessionId, token }));
+    const ok = await AttendanceQr.submitPending();
+    if (ok) Student.render();
+  },
+
+  async submitPendingQr() {
+    const ok = await AttendanceQr.submitPending();
+    if (ok) Student.render();
   },
 
 
@@ -4482,7 +4610,7 @@ ${esc(
   //
   // Backed by:
   //   GET    /grades/:classId/students/:studentId/adjustments
-  //   PUT    /grades/:classId/students/:studentId/adjustments/:component
+  //   PUT    /grades/:classId/students/:studentId/adjustments (atomic batch)
   //   DELETE /grades/:classId/students/:studentId/adjustments/:component
   //
   // The server always validates the new total against that component's
@@ -4567,7 +4695,7 @@ ${esc(
     const reason = (document.getElementById('adj-reason') || {}).value || '';
     const cid = Teacher.state.classId;
     try {
-      const result = await api('PUT', `/grades/${cid}/students/${studentId}/adjustments/${component}`, { newTotal, reason });
+      const result = await api('PUT', `/grades/${cid}/students/${studentId}/adjustments`, { adjustments: { [component]: newTotal }, reason });
       Toast.show('Adjusted', result.message || 'Total adjusted.', 'success');
       Teacher.closeAdjustmentModal();
       Teacher.renderGradebook();
@@ -5182,6 +5310,8 @@ ${esc(
     sessionId
   ) {
 
+    if (Teacher._attendanceQrTimer) { clearInterval(Teacher._attendanceQrTimer); Teacher._attendanceQrTimer = null; }
+
     const box =
       document.getElementById(
         'teacher-tab-content'
@@ -5250,6 +5380,28 @@ ${esc(
             </button>` : ''}
         </div>
 
+        ${session.status === 'open' ? `
+        <div class="mb-5 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="flex-1">
+              <div class="text-[11px] font-black uppercase tracking-widest text-slate-500">Student Check-in</div>
+              <div class="mt-1 flex flex-wrap items-center gap-2">
+                <span class="text-sm font-bold text-slate-700">Attendance Code</span>
+                <span class="px-3 py-1 rounded-lg bg-slate-900 text-amber-300 font-mono font-black tracking-[0.2em]">${esc(session.attendance_code)}</span>
+              </div>
+              <p class="mt-2 text-xs text-slate-500">Learners may use the Attendance Code or scan the rotating QR code. The QR refreshes automatically every minute.</p>
+            </div>
+            <button onclick="Teacher.showAttendanceQr('${esc(sessionId)}')" class="bg-slate-900 hover:bg-slate-800 text-amber-300 px-4 py-2.5 rounded-xl text-xs font-black shadow-lg">
+              <i class="fa-solid fa-qrcode mr-2"></i> Show QR Code
+            </button>
+          </div>
+          <div id="attendance-qr-panel" class="hidden mt-4 pt-4 border-t border-amber-200 text-center">
+            <div id="attendance-qr-canvas" class="inline-flex bg-white p-4 rounded-2xl shadow-sm"></div>
+            <div id="attendance-qr-countdown" class="mt-2 text-xs font-bold text-slate-500"></div>
+          </div>
+        </div>
+        ` : ''}
+
         <div class="space-y-2">
           ${
             Array.isArray(roster) && roster.length
@@ -5271,6 +5423,33 @@ ${esc(
 
   },
 
+
+  async showAttendanceQr(sessionId) {
+    const panel = document.getElementById('attendance-qr-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    if (Teacher._attendanceQrTimer) clearInterval(Teacher._attendanceQrTimer);
+    const refresh = async () => {
+      const data = await api('GET', `/attendance/sessions/${sessionId}/qr`).catch(() => null);
+      if (!data) return;
+      const target = document.getElementById('attendance-qr-canvas');
+      if (!target || typeof QRCode === 'undefined') return Toast.show('QR unavailable','QR renderer failed to load. Attendance Code remains available.','error');
+      target.innerHTML = '';
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.hash = '';
+      url.searchParams.set('attendanceSession', data.sessionId);
+      url.searchParams.set('attendanceToken', data.token);
+      const payload = url.toString();
+      new QRCode(target, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+      let remaining = Number(data.expiresInSeconds || 60);
+      const countdown = document.getElementById('attendance-qr-countdown');
+      if (countdown) countdown.textContent = `QR refreshes in about ${remaining}s`;
+    };
+    await refresh();
+    Teacher._attendanceQrTimer = setInterval(refresh, 55000);
+  },
+
   async setAttendanceStatus(sessionId, studentId, status) {
     try {
       await api('PUT', `/attendance/sessions/${sessionId}/records/${studentId}`, { status });
@@ -5280,6 +5459,7 @@ ${esc(
   },
 
   async closeAttendanceSession(sessionId) {
+    if (Teacher._attendanceQrTimer) { clearInterval(Teacher._attendanceQrTimer); Teacher._attendanceQrTimer = null; }
     try {
       await api('POST', `/attendance/sessions/${sessionId}/close`);
       Toast.show('Closed', 'Attendance session closed.', 'success');

@@ -8,6 +8,31 @@ const router = express.Router();
 router.use(authenticate);
 
 const SESSION_MINUTES = 15;
+const QR_TOKEN_SECONDS = 60;
+
+function qrSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET is required for QR attendance tokens.');
+  return secret;
+}
+
+function qrToken(sessionId, bucket = Math.floor(Date.now() / (QR_TOKEN_SECONDS * 1000))) {
+  const payload = `${sessionId}.${bucket}`;
+  const signature = crypto.createHmac('sha256', qrSecret()).update(payload).digest('base64url');
+  return `${bucket}.${signature}`;
+}
+
+function validQrToken(sessionId, token) {
+  const [bucketRaw, signature] = String(token || '').split('.');
+  const bucket = Number(bucketRaw);
+  if (!Number.isInteger(bucket) || !signature) return false;
+  const nowBucket = Math.floor(Date.now() / (QR_TOKEN_SECONDS * 1000));
+  if (bucket < nowBucket - 1 || bucket > nowBucket) return false;
+  const expected = qrToken(sessionId, bucket).split('.')[1];
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 function genAttendanceCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -114,6 +139,44 @@ router.post('/sessions/:sessionId/close', requireRole('teacher', 'admin'), async
     await pool.query(`UPDATE attendance_sessions SET status = 'closed', closed_at = now() WHERE id = $1`, [session.id]);
     await audit(req, { action: 'attendance_session_closed', recordType: 'attendance_session', recordId: session.id });
     res.json({ message: 'Attendance session closed.' });
+  } catch (e) { next(e); }
+});
+
+// ---------- TEACHER GETS SHORT-LIVED QR ATTENDANCE CREDENTIAL ----------
+router.get('/sessions/:sessionId/qr', requireRole('teacher', 'admin'), async (req, res, next) => {
+  try {
+    const session = (await pool.query(`SELECT * FROM attendance_sessions WHERE id = $1`, [req.params.sessionId])).rows[0];
+    if (!session) return res.status(404).json({ error: 'Session not found.' });
+    if (req.user.role === 'teacher') {
+      const cls = (await pool.query(`SELECT teacher_id FROM classes WHERE id = $1`, [session.class_id])).rows[0];
+      if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+    }
+    if (!isSessionUsable(session)) return res.status(410).json({ error: 'Attendance session is closed or expired.' });
+    res.json({ sessionId: session.id, token: qrToken(session.id), expiresInSeconds: QR_TOKEN_SECONDS });
+  } catch (e) { next(e); }
+});
+
+// ---------- STUDENT SUBMITS ATTENDANCE BY QR CREDENTIAL ----------
+router.post('/submit-qr', requireRole('student'), async (req, res, next) => {
+  try {
+    const { sessionId, token } = req.body || {};
+    if (!sessionId || !token) return res.status(400).json({ error: 'QR attendance credential is required.' });
+    const session = (await pool.query(`SELECT * FROM attendance_sessions WHERE id = $1`, [sessionId])).rows[0];
+    if (!session) return res.status(404).json({ error: 'Attendance session not found.' });
+    if (!isSessionUsable(session)) {
+      if (session.status === 'open') await pool.query(`UPDATE attendance_sessions SET status = 'closed', closed_at = now() WHERE id = $1`, [session.id]);
+      return res.status(410).json({ error: 'Attendance session is closed.' });
+    }
+    if (!validQrToken(session.id, token)) return res.status(410).json({ error: 'This QR code has expired. Scan the current QR code shown by your teacher.' });
+    const enrolled = (await pool.query(`SELECT 1 FROM enrollments WHERE student_id = $1 AND class_id = $2 AND status = 'active'`, [req.user.id, session.class_id])).rows[0];
+    if (!enrolled) return res.status(403).json({ error: 'You are not enrolled in this class.' });
+    if (await learnerGradeLocked(session.class_id, req.user.id)) return res.status(409).json({ error: 'Your grade for this class is finalized or released, so attendance can no longer be changed unless an administrator reopens the grade.' });
+    const dup = (await pool.query(`SELECT 1 FROM attendance_records WHERE session_id = $1 AND student_id = $2`, [session.id, req.user.id])).rows[0];
+    if (dup) return res.status(409).json({ error: 'Attendance has already been recorded for this session.' });
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO attendance_records (id, session_id, student_id, status, recorded_by) VALUES ($1, $2, $3, 'present', $4)`, [id, session.id, req.user.id, req.user.id]);
+    await audit(req, { action: 'attendance_submission_qr', recordType: 'attendance_record', recordId: id, newValue: { sessionId: session.id, status: 'present', method: 'qr' } });
+    res.status(201).json({ message: 'Attendance recorded by QR.' });
   } catch (e) { next(e); }
 });
 

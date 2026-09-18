@@ -7,10 +7,20 @@
   style.id='sg-teacher-student-uppercase';
   style.textContent=`
     #teacher-grade-table tbody td:first-child,
-    #teacher-tab-content [data-sg-student-name]{
+    #teacher-tab-content [data-sg-student-name],
+    #teacher-tab-content .sg-attendance-roster-name,
+    #teacher-tab-content .space-y-2 > div > span.font-semibold.text-sm,
+    #teacher-tab-content table tbody tr > td:first-child{
       text-transform:uppercase!important;
       letter-spacing:.012em;
     }
+    #teacher-tab-content table tbody tr{border-bottom:1px solid #dbe4f0!important;transition:background .15s,box-shadow .15s}
+    #teacher-tab-content table tbody tr:nth-child(odd){background:rgba(248,250,252,.72)}
+    #teacher-tab-content table tbody tr:hover{background:linear-gradient(90deg,rgba(255,247,207,.8),rgba(239,246,255,.82))!important;box-shadow:inset 4px 0 0 #d4a72c}
+    #teacher-tab-content table tbody tr > td:first-child{font-weight:900!important;color:#14213a!important;padding-top:13px!important;padding-bottom:13px!important}
+    #teacher-tab-content .space-y-2 > div{border-bottom:1px solid #dbe4f0;padding-top:10px;padding-bottom:10px;transition:background .15s}
+    #teacher-tab-content .space-y-2 > div:hover{background:rgba(255,248,218,.62)}
+    #teacher-tab-content .space-y-2 > div > span.font-semibold.text-sm{font-weight:900!important;color:#14213a!important}
   `;
   document.head.appendChild(style);
 
@@ -25,6 +35,24 @@
     if(!root)return;
     const tab=Teacher.state?.tab;
     if(tab==='gradebook')return;
+
+    // Attendance session roster is a card/list view rather than a table.
+    // Match each roster row by the student-number suffix and uppercase only
+    // the learner name text, preserving the student number and controls.
+    if(tab==='attendance'){
+      root.querySelectorAll('.space-y-2 > div').forEach(row=>{
+        const span=row.querySelector(':scope > span.font-semibold');
+        if(!span)return;
+        const number=span.querySelector('.text-slate-400');
+        const numberText=number?.textContent||'';
+        const full=span.textContent||'';
+        const name=numberText?full.slice(0,full.lastIndexOf(numberText)).trim():full.trim();
+        if(!name)return;
+        span.childNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE)n.textContent='';});
+        span.insertBefore(document.createTextNode(upper(name)+' '),number||span.firstChild);
+        span.dataset.sgStudentName='true';
+      });
+    }
 
     // Approvals render each learner name as a <b> immediately above email.
     if(tab==='approvals'){
