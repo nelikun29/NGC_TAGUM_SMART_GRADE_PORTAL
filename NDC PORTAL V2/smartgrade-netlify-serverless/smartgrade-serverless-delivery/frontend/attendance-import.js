@@ -24,6 +24,7 @@
       await loadScript('./gradebook-raw-data.js');
       await loadScript('./gradebook-finalize-all.js');
       await loadScript('./teacher-student-name-format.js');
+      await loadScript('./unfinalize-workflow.js');
       // Re-render the active role tab so newly loaded controls are immediately visible.
       if (typeof Teacher !== 'undefined' && Store?.user?.role === 'teacher') {
         await Teacher.render();
@@ -32,8 +33,8 @@
       if (typeof Student !== 'undefined' && Store?.user?.role === 'student') {
         await Student.render();
       }
-      if (typeof Admin !== 'undefined' && Store?.user?.role === 'admin' && Admin.tab === 'users') {
-        Admin.renderUsers();
+      if (typeof Admin !== 'undefined' && Store?.user?.role === 'admin') {
+        await Admin.render();
       }
     } catch (err) {
       console.error('Unable to load portal enhancements:', err);
