@@ -1557,10 +1557,13 @@ const Student = {
         yearLevel: val('student-profile-year'),
         roomNumber: val('student-profile-room')
       });
-      Store.user.profile = data.profile;
+      // Store.user is a localStorage-backed getter. Mutating the returned
+      // object does not persist it, so write the complete user object back.
+      const currentUser = Store.user || {};
+      Store.user = { ...currentUser, profile: data.profile };
       Student.closeEditProfile();
       Toast.show('Profile Updated', data.message || 'Your profile was updated successfully.', 'success');
-      Views.renderForRole();
+      await Student.render();
     } catch {}
     return false;
   },
