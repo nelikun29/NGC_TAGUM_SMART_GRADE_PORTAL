@@ -46,6 +46,15 @@
   if (typeof Admin !== 'undefined') {
     let users=[];
     Admin.unfinalizeTeacherId='';
+    // admin-role-correction.js loads before this enhancement. Preserve its
+    // working role-correction handler before this file replaces renderUsers.
+    const roleCorrectionHandler = typeof Admin.correctRole === 'function'
+      ? Admin.correctRole.bind(Admin)
+      : null;
+    Admin.correctRole = function(userId){
+      if(roleCorrectionHandler)return roleCorrectionHandler(userId);
+      Toast.show('Role Correction Unavailable','Reload the page and try again.','error');
+    };
     const originalRender=Admin.render?.bind(Admin);
     const originalSwitch=Admin.switchTab?.bind(Admin);
 
@@ -79,7 +88,7 @@
       box.innerHTML='<div class="p-6 text-sm font-bold text-slate-500">Loading Teacher and Student accounts…</div>';
       try{users=await api('GET','/admin/users');}catch{users=[];}
       const teachers=users.filter(u=>u.role==='teacher'),students=users.filter(u=>u.role==='student'),admins=users.filter(u=>u.role==='admin');
-      const actions=u=>`<div class="flex flex-wrap gap-2">${u.role==='teacher'?`<button onclick="Admin.openTeacherUnfinalize('${e(u.id)}')" class="rounded-lg bg-amber-50 px-2.5 py-1.5 font-bold text-amber-800 hover:bg-amber-100"><i class="fa-solid fa-lock-open mr-1"></i>Unfinalized</button>`:''}${u.role!=='admin'?`<button onclick="Admin.correctRole?.('${e(u.id)}')" class="rounded-lg bg-blue-50 px-2.5 py-1.5 font-bold text-blue-700 hover:bg-blue-100"><i class="fa-solid fa-user-pen mr-1"></i>Correct Role</button>`:''}<button onclick="Admin.${u.is_active?'deactivate':'reactivate'}('${e(u.id)}')" class="rounded-lg px-2.5 py-1.5 font-bold ${u.is_active?'bg-red-50 text-red-600':'bg-emerald-50 text-emerald-700'}">${u.is_active?'Deactivate':'Reactivate'}</button></div>`;
+      const actions=u=>`<div class="flex flex-wrap gap-2">${u.role==='teacher'?`<button onclick="Admin.openTeacherUnfinalize('${e(u.id)}')" class="rounded-lg bg-amber-50 px-2.5 py-1.5 font-bold text-amber-800 hover:bg-amber-100"><i class="fa-solid fa-lock-open mr-1"></i>Unfinalized</button>`:''}${u.role!=='admin'?`<button onclick="Admin.correctRole('${e(u.id)}')" class="rounded-lg bg-blue-50 px-2.5 py-1.5 font-bold text-blue-700 hover:bg-blue-100"><i class="fa-solid fa-user-pen mr-1"></i>Correct Role</button>`:''}<button onclick="Admin.${u.is_active?'deactivate':'reactivate'}('${e(u.id)}')" class="rounded-lg px-2.5 py-1.5 font-bold ${u.is_active?'bg-red-50 text-red-600':'bg-emerald-50 text-emerald-700'}">${u.is_active?'Deactivate':'Reactivate'}</button></div>`;
       const table=(title,icon,rows,role)=>`<section class="glass-card rounded-2xl overflow-hidden"><div class="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h3 class="font-black text-slate-900"><i class="fa-solid ${icon} mr-2 text-blue-700"></i>${title}</h3><p class="mt-1 text-xs text-slate-500">${rows.length} account${rows.length===1?'':'s'}</p></div></div><div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr><th class="text-left p-3">Name</th><th class="text-left p-3">Email</th><th class="text-left p-3">Status</th><th class="text-left p-3">Actions</th></tr></thead><tbody>${rows.length?rows.map(u=>{const name=role==='teacher'?`${u.t_first||''} ${u.t_last||''}`.trim():role==='student'?`${u.s_first||''} ${u.s_last||''}`.trim():'Administrator';return `<tr class="border-t border-slate-100"><td class="p-3 font-semibold">${e(name||'—')}</td><td class="p-3">${e(u.email)}</td><td class="p-3"><span class="font-bold ${u.is_active?'text-emerald-600':'text-red-600'}">${u.is_active?'Active':'Deactivated'}</span> · ${e(u.approval_status)}</td><td class="p-3">${actions(u)}</td></tr>`;}).join(''):'<tr><td colspan="4" class="p-5 text-center text-slate-400">No accounts in this panel.</td></tr>'}</tbody></table></div></section>`;
       box.innerHTML=`<div class="mb-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4"><h3 class="font-black text-slate-900">Account Management</h3><p class="mt-1 text-xs text-slate-600">Teacher and Student accounts are separated for faster administration. Use <b>Unfinalized</b> on a Teacher row to review that teacher's grade-unlock requests.</p></div><div class="space-y-5">${table('Teacher Panel','fa-chalkboard-user',teachers,'teacher')}${table('Student Panel','fa-user-graduate',students,'student')}${admins.length?table('Administrator','fa-user-shield',admins,'admin'):''}</div>`;
     };
