@@ -63,7 +63,14 @@ router.post('/register/student', async (req, res, next) => {
 
     await audit(req, { action: 'student_registration', recordType: 'student', recordId: id, newValue: { studentNumber, email } });
     res.status(201).json({ message: 'Registration successful. You may now log in.' });
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e && e.code === '23505') {
+      const constraint=String(e.constraint||'');
+      if (constraint.includes('student_number')) return res.status(409).json({ error:'This Student ID is already registered.' });
+      return res.status(409).json({ error:'This email is already registered.' });
+    }
+    next(e);
+  }
 });
 
 // ---------- TEACHER REGISTRATION (requires admin approval) ----------
@@ -103,7 +110,10 @@ router.post('/register/teacher', async (req, res, next) => {
 
     await audit(req, { action: 'teacher_registration', recordType: 'teacher', recordId: id, newValue: { email } });
     res.status(201).json({ message: 'Registration submitted. An administrator must approve your account before you can log in.' });
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e && e.code === '23505') return res.status(409).json({ error:'This email is already registered.' });
+    next(e);
+  }
 });
 
 // ---------- STUDENT PROFILE UPDATE ----------
@@ -141,42 +151,50 @@ router.post('/login', async (req, res, next) => {
 
     stage = 'load_user';
     const normalizedEmail = String(email).trim().toLowerCase();
-    const { rows } = await pool.query(`SELECT * FROM users WHERE lower(email) = $1`, [normalizedEmail]);
-    const user = rows[0];
+    const client=await pool.connect();
+    let user;
     const genericFail = () => res.status(401).json({ error: 'Invalid email or password.' });
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(`SELECT * FROM users WHERE lower(email) = $1 FOR UPDATE`, [normalizedEmail]);
+      user = rows[0];
+      if (!user) { await client.query('ROLLBACK'); return genericFail(); }
 
-    if (!user) return genericFail();
-
-    stage = 'check_lock';
-    if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      return res.status(423).json({ error: `Account temporarily locked due to repeated failed logins. Try again after ${user.locked_until}.` });
-    }
-
-    stage = 'verify_password';
-    if (typeof user.password_hash !== 'string' || !user.password_hash) {
-      console.error('[auth/login] Invalid password hash for user', user.id);
-      return res.status(500).json({ error: 'Unable to complete login. Please contact an administrator.' });
-    }
-    const ok = bcrypt.compareSync(String(password), user.password_hash);
-    if (!ok) {
-      const attempts = Number(user.failed_login_attempts || 0) + 1;
-      let lockedUntil = null;
-      if (attempts >= MAX_ATTEMPTS) {
-        lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString();
+      stage = 'check_lock';
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        await client.query('ROLLBACK');
+        return res.status(423).json({ error: `Account temporarily locked due to repeated failed logins. Try again after ${user.locked_until}.` });
       }
-      stage = 'record_failed_login';
-      await pool.query(`UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`, [attempts, lockedUntil, user.id]);
-      await audit(req, { action: 'login_failed', recordType: 'user', recordId: user.id });
-      return genericFail();
-    }
 
-    stage = 'check_account_status';
-    if (!user.is_active) return res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' });
-    if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
-    if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
+      stage = 'verify_password';
+      if (typeof user.password_hash !== 'string' || !user.password_hash) {
+        await client.query('ROLLBACK');
+        console.error('[auth/login] Invalid password hash for user', user.id);
+        return res.status(500).json({ error: 'Unable to complete login. Please contact an administrator.' });
+      }
+      const ok = bcrypt.compareSync(String(password), user.password_hash);
+      if (!ok) {
+        const attempts = Number(user.failed_login_attempts || 0) + 1;
+        const lockedUntil = attempts >= MAX_ATTEMPTS ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString() : null;
+        stage = 'record_failed_login';
+        await client.query(`UPDATE users SET failed_login_attempts=$1,locked_until=$2,updated_at=now() WHERE id=$3`,[attempts,lockedUntil,user.id]);
+        await client.query('COMMIT');
+        await audit(req, { action: 'login_failed', recordType: 'user', recordId: user.id });
+        return genericFail();
+      }
 
-    stage = 'reset_login_state';
-    await pool.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
+      stage = 'check_account_status';
+      if (!user.is_active) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' }); }
+      if (user.approval_status === 'pending') { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Your account is pending administrator approval.' }); }
+      if (user.approval_status === 'rejected') { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' }); }
+
+      stage = 'reset_login_state';
+      await client.query(`UPDATE users SET failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$1`,[user.id]);
+      await client.query('COMMIT');
+    } catch(e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw e;
+    } finally { client.release(); }
 
     stage = 'load_profile';
     let profile = null;
