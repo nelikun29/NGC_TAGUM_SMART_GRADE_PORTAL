@@ -76,9 +76,10 @@
       await originalRender();
       const section=document.getElementById('teacher-section');
       if(!section)return;
-      const dashboardTitle=[...section.querySelectorAll('h2')].find(x=>(x.textContent||'').trim()==='Teacher Dashboard');
+      const dashboardTitle=[...section.querySelectorAll('h2')].find(x=>(x.textContent||'').trim().toLowerCase()==='teacher dashboard');
+      if(dashboardTitle){dashboardTitle.textContent='TEACHER DASHBOARD';dashboardTitle.style.setProperty('color','#f6c945','important');dashboardTitle.style.setProperty('text-shadow','0 2px 12px rgba(246,201,69,.22)','important');dashboardTitle.style.setProperty('letter-spacing','.035em','important');}
       const dashboardIcon=dashboardTitle?.parentElement?.previousElementSibling;
-      if(dashboardIcon){dashboardIcon.classList.add('sg-teacher-dashboard-icon');const row=dashboardIcon.parentElement;if(row){row.style.alignItems='center';row.style.gap='12px';}}
+      if(dashboardIcon)dashboardIcon.remove();
       const myClasses=[...section.querySelectorAll('h3')].find(x=>(x.textContent||'').trim()==='My Classes');
       myClasses?.classList.remove('sg-ref-heading');
       if(myClasses)setTimeout(()=>myClasses.classList.remove('sg-ref-heading'),0);
