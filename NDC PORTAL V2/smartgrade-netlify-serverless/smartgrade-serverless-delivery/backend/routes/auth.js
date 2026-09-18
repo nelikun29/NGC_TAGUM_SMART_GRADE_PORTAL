@@ -43,6 +43,7 @@ router.post('/register/student', async (req, res, next) => {
 
     const client = await pool.connect();
     try {
+      client=await pool.connect();
       await client.query('BEGIN');
       await client.query(
         `INSERT INTO users (id, role, email, password_hash, approval_status) VALUES ($1, 'student', $2, $3, 'approved')`,
@@ -151,7 +152,7 @@ router.post('/login', async (req, res, next) => {
 
     stage = 'load_user';
     const normalizedEmail = String(email).trim().toLowerCase();
-    const client=await pool.connect();
+    let client;
     let user;
     const genericFail = () => res.status(401).json({ error: 'Invalid email or password.' });
     try {
@@ -194,7 +195,7 @@ router.post('/login', async (req, res, next) => {
     } catch(e) {
       try { await client.query('ROLLBACK'); } catch {}
       throw e;
-    } finally { client.release(); }
+    } finally { if(client) client.release(); }
 
     stage = 'load_profile';
     let profile = null;
