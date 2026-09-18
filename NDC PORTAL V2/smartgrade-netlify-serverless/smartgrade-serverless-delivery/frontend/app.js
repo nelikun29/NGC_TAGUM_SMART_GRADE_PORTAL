@@ -1547,6 +1547,11 @@ const Student = {
 
             </form>
 
+            <button type="button" onclick="Student.openQrScanner()" class="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-amber-300 text-sm font-black hover:bg-slate-800 transition shadow-sm">
+              <i class="fa-solid fa-camera"></i>
+              Scan QR Code
+            </button>
+
           </div>
 
         </div>
@@ -1882,6 +1887,70 @@ const Student = {
 
   },
 
+
+  async openQrScanner() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      Toast.show('Camera Unavailable', 'This browser does not support camera scanning. You can still enter the Attendance Code.', 'error');
+      return;
+    }
+    if (typeof jsQR === 'undefined') {
+      Toast.show('Scanner Unavailable', 'QR scanner failed to load. You can still enter the Attendance Code.', 'error');
+      return;
+    }
+    Student.closeQrScanner();
+    const host = document.createElement('div');
+    host.id = 'student-qr-scanner-modal';
+    host.className = 'fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4';
+    host.innerHTML = `<div class="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"><div class="flex items-center justify-between px-5 py-4 border-b"><div><h3 class="font-black text-lg text-slate-800"><i class="fa-solid fa-qrcode text-amber-500 mr-2"></i>Scan Attendance QR</h3><p class="text-xs text-slate-500 mt-1">Point your camera at the QR code shown by your teacher.</p></div><button type="button" onclick="Student.closeQrScanner()" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button></div><div class="p-4"><div class="relative overflow-hidden rounded-2xl bg-black aspect-square"><video id="student-qr-video" playsinline muted class="w-full h-full object-cover"></video><div class="absolute inset-[12%] border-2 border-amber-300 rounded-2xl pointer-events-none"></div></div><p id="student-qr-status" class="mt-3 text-center text-xs font-bold text-slate-500">Starting camera…</p><button type="button" onclick="Student.closeQrScanner()" class="mt-3 w-full px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold">Cancel</button></div></div>`;
+    document.body.appendChild(host);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      Student._qrStream = stream;
+      const video = document.getElementById('student-qr-video');
+      if (!video) return Student.closeQrScanner();
+      video.srcObject = stream;
+      await video.play();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const scan = () => {
+        if (!Student._qrStream || !document.getElementById('student-qr-scanner-modal')) return;
+        if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+          if (code?.data) return Student.handleScannedAttendanceQr(code.data);
+        }
+        Student._qrFrame = requestAnimationFrame(scan);
+      };
+      document.getElementById('student-qr-status').textContent = 'Ready — align the teacher QR inside the frame.';
+      Student._qrFrame = requestAnimationFrame(scan);
+    } catch (e) {
+      Student.closeQrScanner();
+      Toast.show('Camera Permission Required', 'Allow camera access to scan the QR code. You can still use the Attendance Code.', 'error');
+    }
+  },
+
+  closeQrScanner() {
+    if (Student._qrFrame) cancelAnimationFrame(Student._qrFrame);
+    Student._qrFrame = null;
+    if (Student._qrStream) Student._qrStream.getTracks().forEach(t => t.stop());
+    Student._qrStream = null;
+    document.getElementById('student-qr-scanner-modal')?.remove();
+  },
+
+  async handleScannedAttendanceQr(raw) {
+    let url;
+    try { url = new URL(raw); } catch { Toast.show('Invalid QR Code', 'This is not a Smart Grade attendance QR code.', 'error'); return; }
+    if (url.origin !== window.location.origin) { Toast.show('Invalid QR Code', 'This QR code does not belong to this portal.', 'error'); return; }
+    const sessionId = url.searchParams.get('attendanceSession');
+    const token = url.searchParams.get('attendanceToken');
+    if (!sessionId || !token) { Toast.show('Invalid QR Code', 'This QR code is not a valid attendance credential.', 'error'); return; }
+    Student.closeQrScanner();
+    sessionStorage.setItem(AttendanceQr.key, JSON.stringify({ sessionId, token }));
+    const ok = await AttendanceQr.submitPending();
+    if (ok) Student.render();
+  },
 
   async submitPendingQr() {
     const ok = await AttendanceQr.submitPending();
