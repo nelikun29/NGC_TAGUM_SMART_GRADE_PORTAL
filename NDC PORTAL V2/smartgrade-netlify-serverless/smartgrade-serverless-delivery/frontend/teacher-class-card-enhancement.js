@@ -8,6 +8,8 @@
   #teacher-section .sg-teacher-class-gallery{position:relative;margin-bottom:18px;padding:18px 20px;border-radius:20px;border:1px solid rgba(246,214,111,.25);background:linear-gradient(125deg,rgba(7,26,61,.96),rgba(11,47,104,.91) 62%,rgba(125,91,18,.76));box-shadow:0 20px 46px rgba(1,9,25,.30),inset 0 1px 0 rgba(255,255,255,.09);overflow:hidden}
   #teacher-section .sg-teacher-class-gallery::after{content:"";position:absolute;right:-55px;top:-100px;width:210px;height:210px;border-radius:50%;border:1px solid rgba(246,214,111,.20);background:radial-gradient(circle,rgba(246,214,111,.12),transparent 67%);pointer-events:none}
   #teacher-section .sg-teacher-class-gallery h3,#teacher-section .sg-teacher-class-gallery h2{color:#fff!important}
+  #teacher-section .sg-teacher-dashboard-icon{width:44px!important;height:44px!important;min-width:44px!important;flex:0 0 44px!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:14px!important;background:#eff6ff!important;border:1px solid rgba(96,165,250,.38)!important;box-shadow:0 8px 20px rgba(37,99,235,.14)!important;color:#1d4ed8!important;position:relative!important;inset:auto!important;transform:none!important;margin:0!important}
+  #teacher-section .sg-teacher-dashboard-icon i{display:block!important;width:auto!important;height:auto!important;margin:0!important;font-size:18px!important;line-height:1!important;color:#1d4ed8!important;background:transparent!important;transform:none!important}
   #teacher-section .sg-teacher-class-gallery p{color:#c7d4e8!important}
   #teacher-section article.sg-teacher-premium-card{--sg-card-a:#041a42;--sg-card-b:#063b82;--sg-card-c:#0a65c8;--sg-card-accent:#e7b52f;--sg-card-glow:rgba(255,210,82,.30);padding:0!important;overflow:hidden!important;border-radius:24px!important;border:1px solid color-mix(in srgb,var(--sg-card-accent) 42%,transparent)!important;background:linear-gradient(150deg,rgba(11,36,87,.90),rgba(7,26,61,.82))!important;box-shadow:0 25px 58px rgba(1,9,25,.32),0 8px 22px color-mix(in srgb,var(--sg-card-accent) 10%,transparent),inset 0 1px 0 rgba(255,255,255,.07)!important;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease!important}
   #teacher-section article.sg-teacher-premium-card.sg-theme-blue{--sg-card-a:#041a42;--sg-card-b:#0752a6;--sg-card-c:#1684df;--sg-card-accent:#f2c94c;--sg-card-glow:rgba(96,165,250,.34)}
@@ -22,9 +24,9 @@
   #teacher-section article.sg-teacher-premium-card>div:first-child::after{content:"";position:absolute;z-index:-1;right:-42px;top:-96px;width:235px;height:235px;border-radius:50%;border:1px solid rgba(255,255,255,.25);box-shadow:0 0 0 22px rgba(255,255,255,.025),0 0 0 48px rgba(255,255,255,.018);background:radial-gradient(circle,var(--sg-card-glow),transparent 66%);pointer-events:none}
   #teacher-section article.sg-teacher-premium-card>div:first-child h4{color:#fff!important;font-size:1.22rem!important;font-weight:900!important;line-height:1.25;text-shadow:0 2px 10px rgba(0,12,38,.36)}
   #teacher-section article.sg-teacher-premium-card>div:first-child p{color:rgba(248,250,252,.90)!important;font-weight:600}
-  #teacher-section article.sg-teacher-premium-card>div:first-child .h-14{background:linear-gradient(145deg,rgba(255,255,255,.19),color-mix(in srgb,var(--sg-card-accent) 16%,transparent))!important;color:#fff3b0!important;border:1px solid color-mix(in srgb,var(--sg-card-accent) 58%,transparent)!important;backdrop-filter:blur(12px);box-shadow:0 10px 25px rgba(0,15,45,.25),inset 0 1px 0 rgba(255,255,255,.24)!important}
+  #teacher-section article.sg-teacher-premium-card>div:first-child .h-14{background:rgba(255,255,255,.16)!important;color:#fff3b0!important;border:1px solid color-mix(in srgb,var(--sg-card-accent) 58%,transparent)!important;backdrop-filter:blur(12px);box-shadow:0 10px 25px rgba(0,15,45,.25),inset 0 1px 0 rgba(255,255,255,.24)!important;overflow:hidden!important;display:grid!important;place-items:center!important;flex:0 0 56px!important}.sg-teacher-premium-card>div:first-child .h-14 i{font-size:20px!important;line-height:1!important;margin:0!important;transform:none!important}
   #teacher-section article.sg-teacher-premium-card:hover>div:first-child{filter:saturate(1.12) brightness(1.04)}
-  #teacher-section article.sg-teacher-premium-card>div:nth-child(2){padding:18px 20px 20px!important;background:linear-gradient(145deg,rgba(250,252,255,.96),rgba(240,245,252,.92))!important;color:#172033}
+  #teacher-section article.sg-teacher-premium-card>div:nth-child(2){padding:18px 20px 20px!important;background:#fff4bf!important;background-image:linear-gradient(145deg,#fff9dc,#ffefad)!important;color:#172033!important}
   #teacher-section article.sg-teacher-premium-card>div:nth-child(2)>div:first-child{padding:12px 13px;border-radius:14px;border:1px solid rgba(180,193,213,.46);background:rgba(255,255,255,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.86)}
   #teacher-section article.sg-teacher-premium-card>div:nth-child(2) p,#teacher-section article.sg-teacher-premium-card>div:nth-child(2) code{color:#172033!important}
   #teacher-section article.sg-teacher-premium-card>div:nth-child(2) .text-slate-500{color:#64748b!important}
@@ -35,6 +37,21 @@
   #teacher-section article.sg-teacher-premium-card button[onclick*="selectClass"]{background:linear-gradient(135deg,var(--sg-card-a),var(--sg-card-b) 70%,color-mix(in srgb,var(--sg-card-accent) 68%,var(--sg-card-b)))!important;color:#fff!important;border:1px solid color-mix(in srgb,var(--sg-card-accent) 34%,transparent)!important;box-shadow:0 11px 24px rgba(7,26,61,.18)!important}
   #teacher-section article.sg-teacher-premium-card button[onclick*="selectClass"]:hover{filter:brightness(1.08)}
   #teacher-section article.sg-teacher-premium-card button[onclick*="editClass"]{background:rgba(255,255,255,.82)!important;border:1px solid rgba(180,193,213,.58)!important;color:#0b2457!important}
+  #teacher-section article.sg-teacher-premium-card i{vertical-align:middle}
+  #teacher-section article.sg-teacher-premium-card button i{display:inline-block!important;width:1.1em!important;text-align:center!important;margin-right:.35rem!important;line-height:1!important}
+  #teacher-section #teacher-class-select{background:#fffdf4!important;color:#0b2457!important;border-color:#d4a72c!important;font-weight:800!important}
+  #teacher-section #teacher-class-select option{background:#fff!important;color:#0f172a!important}
+  #teacher-section label[for="teacher-class-select"]{color:#e8eefc!important;font-weight:800!important}
+  #teacher-section article.sg-teacher-premium-card>div:not(:first-child){background-color:#fff4bf!important}
+  #teacher-section .sg-teacher-class-gallery .sg-ref-heading::before{display:none!important;content:none!important}
+  #teacher-section .sg-teacher-class-gallery .sg-ref-heading{gap:0!important}
+  /* Final teacher-dashboard corrections */
+  #teacher-section .sg-teacher-dashboard-icon{margin-right:14px!important;transform:translateX(0)!important;z-index:1!important}
+  #teacher-section .sg-teacher-dashboard-icon+div{min-width:0!important;padding-left:0!important}
+  #teacher-section label[for="teacher-class-select"]{color:#334155!important;text-shadow:none!important;opacity:1!important;font-weight:800!important}
+  #teacher-section article.sg-teacher-premium-card{background:#fff4bf!important;background-image:linear-gradient(145deg,#fff9dc,#ffefad)!important;border-color:#e5c45a!important}
+  #teacher-section article.sg-teacher-premium-card>div:first-child{background:linear-gradient(118deg,var(--sg-card-a) 0%,var(--sg-card-b) 48%,var(--sg-card-c) 100%)!important}
+  #teacher-section article.sg-teacher-premium-card>div:nth-child(2){background:#fff4bf!important;background-image:linear-gradient(145deg,#fff9dc,#ffefad)!important}
   @media(max-width:640px){#teacher-section .sg-teacher-class-gallery{padding:15px 16px;border-radius:17px}#teacher-section article.sg-teacher-premium-card>div:first-child{padding:18px 16px!important;min-height:120px!important}#teacher-section article.sg-teacher-premium-card>div:nth-child(2){padding:15px!important}}
   `;
   document.head.appendChild(css);
@@ -59,6 +76,13 @@
       await originalRender();
       const section=document.getElementById('teacher-section');
       if(!section)return;
+      const dashboardTitle=[...section.querySelectorAll('h2')].find(x=>(x.textContent||'').trim()==='Teacher Dashboard');
+      const dashboardIcon=dashboardTitle?.parentElement?.previousElementSibling;
+      if(dashboardIcon){dashboardIcon.classList.add('sg-teacher-dashboard-icon');const row=dashboardIcon.parentElement;if(row){row.style.alignItems='center';row.style.gap='12px';}}
+      const myClasses=[...section.querySelectorAll('h3')].find(x=>(x.textContent||'').trim()==='My Classes');
+      myClasses?.classList.remove('sg-ref-heading');
+      if(myClasses)setTimeout(()=>myClasses.classList.remove('sg-ref-heading'),0);
+      section.querySelectorAll('button[onclick="Teacher.showCreateClass()"]').forEach(btn=>{if((btn.textContent||'').includes('Create New Class'))btn.remove();});
       const cards=[...section.querySelectorAll('article.sg-teacher-premium-card')];
       if(cards.length){
         const grid=cards[0].parentElement;

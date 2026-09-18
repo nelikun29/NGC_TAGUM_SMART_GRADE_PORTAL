@@ -9,6 +9,11 @@ const { isNonEmptyString, isEmail } = require('../utils/validate');
 
 const router = express.Router();
 
+function requireStudentRole(req,res,next){
+  if (!req.user || req.user.role !== 'student') return res.status(403).json({ error:'Student access required.' });
+  next();
+}
+
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
@@ -101,6 +106,26 @@ router.post('/register/teacher', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---------- STUDENT PROFILE UPDATE ----------
+router.put('/profile/student', authenticate, requireStudentRole, async (req, res, next) => {
+  try {
+    const { firstName, middleName, lastName, yearLevel, roomNumber } = req.body || {};
+    if (![firstName, lastName, yearLevel].every(v => isNonEmptyString(String(v || '')))) {
+      return res.status(400).json({ error: 'First name, last name, and year level are required.' });
+    }
+    const existing = (await pool.query('SELECT * FROM students WHERE id = $1', [req.user.id])).rows[0];
+    if (!existing) return res.status(404).json({ error: 'Student profile not found.' });
+    const updated = (await pool.query(
+      `UPDATE students SET first_name=$1,middle_name=$2,last_name=$3,year_level=$4,room_number=$5 WHERE id=$6 RETURNING *`,
+      [String(firstName).trim(), String(middleName || '').trim() || null, String(lastName).trim(), String(yearLevel).trim(), String(roomNumber || '').trim() || null, req.user.id]
+    )).rows[0];
+    await audit(req, { action:'student_profile_updated', recordType:'student', recordId:req.user.id,
+      previousValue:{first_name:existing.first_name,middle_name:existing.middle_name,last_name:existing.last_name,year_level:existing.year_level,room_number:existing.room_number},
+      newValue:{first_name:updated.first_name,middle_name:updated.middle_name,last_name:updated.last_name,year_level:updated.year_level,room_number:updated.room_number} });
+    res.json({ message:'Profile updated successfully.', profile:updated });
+  } catch (e) { next(e); }
+});
+
 // ---------- LOGIN ----------
 // The API already has a Netlify-compatible global request limiter. Login also
 // enforces a persistent per-account 5-attempt/15-minute lockout below, so a
@@ -164,8 +189,11 @@ router.post('/login', async (req, res, next) => {
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
   } catch (e) {
-    console.error(`[auth/login] stage=${stage}`, e && e.stack ? e.stack : e);
-    next(e);
+    console.error('=== LOGIN FAILURE ===');
+    console.error('Stage:', stage);
+    console.error('Message:', e && e.message ? e.message : e);
+    console.error('Stack:', e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: 'Unable to complete login. Please try again.' });
   }
 });
 

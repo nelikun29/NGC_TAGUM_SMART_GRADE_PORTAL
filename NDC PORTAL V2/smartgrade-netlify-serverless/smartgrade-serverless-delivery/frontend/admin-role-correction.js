@@ -27,7 +27,18 @@
     wrap.querySelector('#sg-role-form').onsubmit=async ev=>{ev.preventDefault();const f=new FormData(ev.currentTarget);const payload={targetRole:toStudent?'student':'teacher'};for(const [k,v] of f.entries())payload[k]=String(v).trim();if(!confirm(`Confirm role correction to ${payload.targetRole.toUpperCase()}? The existing login account will be preserved.`))return;try{const r=await api('POST',`/admin/users/${user.id}/correct-role`,payload);wrap.remove();Toast.show('Role Corrected',r.message,'success');Admin.renderUsers();ApprovalManager?.forceRefresh?.();}catch{}};
   }
 
-  Admin.correctRole = id => { const u=users.find(x=>x.id===id); if(u) modal(u); };
+  Admin.correctRole = async id => {
+    let u=users.find(x=>String(x.id)===String(id));
+    if(!u){
+      try{
+        const fresh=await api('GET','/admin/users');
+        users=Array.isArray(fresh)?fresh:[];
+        u=users.find(x=>String(x.id)===String(id));
+      }catch{}
+    }
+    if(!u){Toast.show('Account Not Found','Unable to load this account for role correction.','error');return;}
+    modal(u);
+  };
   Admin.renderUsers = async function(){
     const box=document.getElementById('admin-tab-content');if(!box)return;
     box.innerHTML='<div class="p-6 text-sm font-bold text-slate-500">Loading user accounts…</div>';
