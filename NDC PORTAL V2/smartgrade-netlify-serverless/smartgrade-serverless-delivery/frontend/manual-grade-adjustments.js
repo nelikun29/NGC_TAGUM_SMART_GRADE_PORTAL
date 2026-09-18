@@ -8,7 +8,7 @@
     .sg-adjust-modal{width:min(560px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:20px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.3)}
     .sg-adjust-modal h3{margin:0;color:#0b2457;font-weight:900}.sg-adjust-name{margin:4px 0 16px;color:#475569;font-weight:800;text-transform:uppercase}
     .sg-adjust-card{border:1px solid #dbe3ef;border-radius:14px;padding:12px;margin:10px 0}.sg-adjust-card b{color:#0b2457}.sg-adjust-meta{font-size:12px;color:#64748b;margin:4px 0 8px}
-    .sg-adjust-card input,.sg-adjust-card textarea{width:100%;border:1px solid #b9c5d8;border-radius:9px;padding:8px;margin-top:6px}.sg-adjust-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+    .sg-adjust-card input,.sg-adjust-card textarea{width:100%;border:1px solid #b9c5d8;border-radius:9px;padding:8px;margin-top:6px}.sg-adjust-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}.sg-adjust-common{margin-top:14px;padding-top:14px;border-top:1px solid #dbe3ef}.sg-adjust-common textarea{width:100%;border:1px solid #b9c5d8;border-radius:9px;padding:8px;min-height:70px}.sg-adjust-common-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
     .sg-adjust-actions button,.sg-adjust-close{border:0;border-radius:9px;padding:7px 10px;font-weight:800;cursor:pointer}.sg-adjust-save{background:#0b2457;color:white}.sg-adjust-reset{background:#f1f5f9;color:#334155}.sg-adjust-close{background:#e2e8f0;color:#334155}
     .sg-adjust-locked{opacity:.55}.sg-adjust-badge{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:9px;font-weight:900}
   `;document.head.appendChild(css);
@@ -23,13 +23,27 @@
       const meta=needs?`Recorded: ${x.recordedTotal} points · Enter the Overall Total Score below.`:`Recorded: ${x.recordedTotal} / ${x.max} ${esc(x.label)} · Effective: ${x.currentTotal} / ${x.max}`;
       const maxInput=needs?`<input class="sg-adjust-max" type="number" min="1" step="1" placeholder="Overall Total Score (e.g. 150)" ${locked?'disabled':''}>`:'';
       const maxAttr=needs?'':`max="${x.max}"`;
-      return `<div class="sg-adjust-card" data-component="${k}" data-component-id="${esc(x.componentId||'')}"><b>${labels[k]}</b>${adjusted?'<span class="sg-adjust-badge">ADJUSTED</span>':''}<div class="sg-adjust-meta">${meta}</div>${maxInput}<input class="sg-adjust-value" type="number" min="0" ${maxAttr} step="0.01" value="${x.currentTotal}" placeholder="Adjusted learner score" ${locked?'disabled':''}><textarea class="sg-adjust-reason" rows="2" placeholder="Reason for adjustment (required)" ${locked?'disabled':''}></textarea><div class="sg-adjust-actions"><button class="sg-adjust-reset" ${locked||!adjusted?'disabled':''}>Reset to Recorded</button><button class="sg-adjust-save" ${locked?'disabled':''}>Save Adjustment</button></div></div>`;}).join('');
-    overlay.innerHTML=`<div class="sg-adjust-modal"><h3>Manual Overall Score Adjustment</h3><div class="sg-adjust-name">${esc(row.studentName)}</div>${locked?'<div class="sg-adjust-meta">This learner is finalized/released. Request modification and obtain Admin approval before adjusting totals.</div>':''}${cards}<div style="text-align:right;margin-top:14px"><button class="sg-adjust-close">Close</button></div></div>`;
+      return `<div class="sg-adjust-card" data-component="${k}" data-component-id="${esc(x.componentId||'')}"><b>${labels[k]}</b>${adjusted?'<span class="sg-adjust-badge">ADJUSTED</span>':''}<div class="sg-adjust-meta">${meta}</div>${maxInput}<input class="sg-adjust-value" type="number" min="0" ${maxAttr} step="0.01" value="${x.currentTotal}" placeholder="Adjusted learner score" ${locked?'disabled':''}><div class="sg-adjust-actions"><button class="sg-adjust-reset" ${locked||!adjusted?'disabled':''}>Reset to Recorded</button></div></div>`;}).join('');
+    overlay.innerHTML=`<div class="sg-adjust-modal"><h3>Manual Overall Score Adjustment</h3><div class="sg-adjust-name">${esc(row.studentName)}</div>${locked?'<div class="sg-adjust-meta">This learner is finalized/released. Request modification and obtain Admin approval before adjusting totals.</div>':''}${cards}<div class="sg-adjust-common"><textarea class="sg-adjust-common-reason" rows="2" placeholder="Reason for adjustment (required)" ${locked?'disabled':''}></textarea><div class="sg-adjust-common-actions"><button class="sg-adjust-close">Close</button><button class="sg-adjust-save-all" ${locked?'disabled':''}>Save Adjustments</button></div></div></div>`;
     document.body.appendChild(overlay);
     overlay.querySelector('.sg-adjust-close').onclick=()=>overlay.remove();overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
     overlay.querySelectorAll('.sg-adjust-card[data-component]').forEach(card=>{const k=card.dataset.component;
-      card.querySelector('.sg-adjust-save')?.addEventListener('click',async()=>{const value=Number(card.querySelector('.sg-adjust-value').value),reason=card.querySelector('.sg-adjust-reason').value.trim(),maxInput=card.querySelector('.sg-adjust-max');if(maxInput){const max=Number(maxInput.value);if(!Number.isFinite(max)||max<=0){Toast.show('Overall Total Required','Enter a valid Overall Total Score first.','error');return;}if(value>max){Toast.show('Invalid Score','Adjusted score cannot exceed the Overall Total Score.','error');return;}try{await api('PUT',`/grading-denominators/${classId}`,{components:[{id:card.dataset.componentId,maxPoints:max}]});}catch{return;}}if(reason.length<5){Toast.show('Reason required','Please enter at least 5 characters explaining the adjustment.','error');return;}try{await api('PUT',`/grades/${classId}/students/${row.studentId}/adjustments/${k}`,{newTotal:value,reason});Toast.show('Saved',`${labels[k]} total adjusted successfully.`,'success');overlay.remove();await Teacher.renderGradebook();}catch{}});
       card.querySelector('.sg-adjust-reset')?.addEventListener('click',async()=>{if(!confirm(`Reset ${labels[k]} to the recorded system total?`))return;try{await api('DELETE',`/grades/${classId}/students/${row.studentId}/adjustments/${k}`);Toast.show('Reset',`${labels[k]} reverted to recorded total.`,'success');overlay.remove();await Teacher.renderGradebook();}catch{}});
+    });
+    overlay.querySelector('.sg-adjust-save-all')?.addEventListener('click',async e=>{
+      const reason=overlay.querySelector('.sg-adjust-common-reason')?.value.trim()||'';
+      if(reason.length<5){Toast.show('Reason required','Please enter at least 5 characters explaining the adjustment.','error');return;}
+      const btn=e.currentTarget;btn.disabled=true;
+      try{
+        const cards=[...overlay.querySelectorAll('.sg-adjust-card[data-component]')];
+        for(const card of cards){
+          const k=card.dataset.component,value=Number(card.querySelector('.sg-adjust-value')?.value),maxInput=card.querySelector('.sg-adjust-max');
+          if(!Number.isFinite(value))continue;
+          if(maxInput){const max=Number(maxInput.value);if(!Number.isFinite(max)||max<=0){Toast.show('Overall Total Required',`Enter a valid Overall Total Score for ${labels[k]}.`,'error');return;}if(value>max){Toast.show('Invalid Score',`${labels[k]} score cannot exceed its Overall Total Score.`,'error');return;}await api('PUT',`/grading-denominators/${classId}`,{components:[{id:card.dataset.componentId,maxPoints:max}]});}
+          await api('PUT',`/grades/${classId}/students/${row.studentId}/adjustments/${k}`,{newTotal:value,reason});
+        }
+        Toast.show('Saved','Overall score adjustments saved successfully.','success');overlay.remove();await Teacher.renderGradebook();
+      }catch{}finally{if(btn.isConnected)btn.disabled=false;}
     });
   }
   async function mount(){
