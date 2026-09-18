@@ -12,18 +12,16 @@
     .sg-adjust-actions button,.sg-adjust-close{border:0;border-radius:9px;padding:7px 10px;font-weight:800;cursor:pointer}.sg-adjust-save{background:#0b2457;color:white}.sg-adjust-reset{background:#f1f5f9;color:#334155}.sg-adjust-close{background:#e2e8f0;color:#334155}
     .sg-adjust-locked{opacity:.55}.sg-adjust-badge{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:9px;font-weight:900}
   `;document.head.appendChild(css);
-  const labels={attendance:'Attendance',quiz:'Quiz',performance:'Performance Task'};
+  const labels={attendance:'Attendance',quiz:'Quiz',performance:'Performance Task',exam:'Exam'};
   async function open(row){
     const classId=Teacher.state.classId;let data;
     try{data=await api('GET',`/grades/${classId}/students/${row.studentId}/adjustments`);}catch{return;}
     const locked=['finalized','released'].includes(row.status);
     const overlay=document.createElement('div');overlay.className='sg-adjust-overlay';
-    const cards=Object.keys(labels).map(k=>{const x=data[k];if(!x?.available)return `<div class="sg-adjust-card sg-adjust-locked"><b>${labels[k]}</b><div class="sg-adjust-meta">${esc(x?.message||'Not available for adjustment.')}</div></div>`;
-      const adjusted=Math.abs(Number(x.currentAdjustmentPoints||0))>.000001,needs=!!x.needsDenominator,attendance=k==='attendance';
-      const meta=needs?`Recorded: ${x.recordedTotal} points · Enter the Overall Total Score below.`:`Recorded: ${x.recordedTotal} / ${x.max} ${esc(x.label)} · Effective: ${x.currentTotal} / ${x.max}`;
-      const maxInput=(needs||attendance)?`<input class="sg-adjust-max" type="number" min="1" step="1" value="${attendance?x.max:''}" placeholder="${attendance?'Total Required Attendance Days':'Overall Total Score (e.g. 150)'}" ${locked?'disabled':''}>`:'';
-      const maxAttr=needs?'':`max="${x.max}"`;
-      return `<div class="sg-adjust-card" data-component="${k}" data-component-id="${esc(x.componentId||'')}"><b>${labels[k]}</b>${adjusted?'<span class="sg-adjust-badge">ADJUSTED</span>':''}<div class="sg-adjust-meta">${meta}</div>${maxInput}<input class="sg-adjust-value" type="number" min="0" ${maxAttr} step="0.01" value="${x.currentTotal}" placeholder="Adjusted learner score" ${locked?'disabled':''}><div class="sg-adjust-actions"><button class="sg-adjust-reset" ${locked||!adjusted?'disabled':''}>Reset to Recorded</button></div></div>`;}).join('');
+    const entries=Object.entries(data).filter(([,x])=>x&&x.available);
+    const cards=entries.map(([k,x])=>{const adjusted=Math.abs(Number(x.currentAdjustmentPoints||0))>.000001;
+      const label=x.componentName||labels[k]||k;
+      return `<div class="sg-adjust-card" data-component="${esc(k)}"><b>${esc(label)}</b>${adjusted?'<span class="sg-adjust-badge">ADJUSTED</span>':''}<div class="sg-adjust-meta">Required Total: ${x.max} ${esc(x.label)} · Recorded: ${x.recordedTotal} · Effective: ${x.currentTotal}</div><input class="sg-adjust-value" type="number" min="0" max="${x.max}" step="0.01" value="${x.currentTotal}" placeholder="Learner points (maximum ${x.max})" ${locked?'disabled':''}><div class="sg-adjust-actions"><button class="sg-adjust-reset" ${locked||!adjusted?'disabled':''}>Reset to Recorded</button></div></div>`;}).join('');
     overlay.innerHTML=`<div class="sg-adjust-modal"><h3>Manual Overall Score Adjustment</h3><div class="sg-adjust-name">${esc(row.studentName)}</div>${locked?'<div class="sg-adjust-meta">This learner is finalized/released. Request modification and obtain Admin approval before adjusting totals.</div>':''}${cards}<div class="sg-adjust-common"><textarea class="sg-adjust-common-reason" rows="2" placeholder="Reason for adjustment (required)" ${locked?'disabled':''}></textarea><div class="sg-adjust-common-actions"><button class="sg-adjust-close">Close</button><button class="sg-adjust-save-all" ${locked?'disabled':''}>Save Adjustments</button></div></div></div>`;
     document.body.appendChild(overlay);
     overlay.querySelector('.sg-adjust-close').onclick=()=>overlay.remove();overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
@@ -37,9 +35,9 @@
       try{
         const cards=[...overlay.querySelectorAll('.sg-adjust-card[data-component]')];
         for(const card of cards){
-          const k=card.dataset.component,value=Number(card.querySelector('.sg-adjust-value')?.value),maxInput=card.querySelector('.sg-adjust-max');
+          const k=card.dataset.component,value=Number(card.querySelector('.sg-adjust-value')?.value),max=Number(card.querySelector('.sg-adjust-value')?.max);
           if(!Number.isFinite(value))continue;
-          if(maxInput){const max=Number(maxInput.value);if(!Number.isFinite(max)||max<=0){Toast.show('Overall Total Required',`Enter a valid overall total for ${labels[k]}.`,'error');return;}if(value>max){Toast.show('Invalid Score',`${labels[k]} value cannot exceed its overall total.`,'error');return;}await api('PUT',`/grading-denominators/${classId}`,{components:[{id:card.dataset.componentId,maxPoints:max}]});}
+          if(value<0||value>max){Toast.show('Invalid Score',`${labels[k]||k} must be from 0 to ${max}.`,'error');return;}
           await api('PUT',`/grades/${classId}/students/${row.studentId}/adjustments/${k}`,{newTotal:value,reason});
         }
         Toast.show('Saved','Overall score adjustments saved successfully.','success');overlay.remove();await Teacher.renderGradebook();
