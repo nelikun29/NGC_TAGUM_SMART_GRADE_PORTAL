@@ -5266,6 +5266,28 @@ ${esc(
             </button>` : ''}
         </div>
 
+        ${session.status === 'open' ? `
+        <div class="mb-5 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="flex-1">
+              <div class="text-[11px] font-black uppercase tracking-widest text-slate-500">Student Check-in</div>
+              <div class="mt-1 flex flex-wrap items-center gap-2">
+                <span class="text-sm font-bold text-slate-700">Attendance Code</span>
+                <span class="px-3 py-1 rounded-lg bg-slate-900 text-amber-300 font-mono font-black tracking-[0.2em]">${esc(session.attendance_code)}</span>
+              </div>
+              <p class="mt-2 text-xs text-slate-500">Learners may use the Attendance Code or scan the rotating QR code. The QR refreshes automatically every minute.</p>
+            </div>
+            <button onclick="Teacher.showAttendanceQr('${esc(sessionId)}')" class="bg-slate-900 hover:bg-slate-800 text-amber-300 px-4 py-2.5 rounded-xl text-xs font-black shadow-lg">
+              <i class="fa-solid fa-qrcode mr-2"></i> Show QR Code
+            </button>
+          </div>
+          <div id="attendance-qr-panel" class="hidden mt-4 pt-4 border-t border-amber-200 text-center">
+            <div id="attendance-qr-canvas" class="inline-flex bg-white p-4 rounded-2xl shadow-sm"></div>
+            <div id="attendance-qr-countdown" class="mt-2 text-xs font-bold text-slate-500"></div>
+          </div>
+        </div>
+        ` : ''}
+
         <div class="space-y-2">
           ${
             Array.isArray(roster) && roster.length
@@ -5285,6 +5307,28 @@ ${esc(
 
     `;
 
+  },
+
+
+  async showAttendanceQr(sessionId) {
+    const panel = document.getElementById('attendance-qr-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    if (Teacher._attendanceQrTimer) clearInterval(Teacher._attendanceQrTimer);
+    const refresh = async () => {
+      const data = await api('GET', `/attendance/sessions/${sessionId}/qr`).catch(() => null);
+      if (!data) return;
+      const target = document.getElementById('attendance-qr-canvas');
+      if (!target || typeof QRCode === 'undefined') return Toast.show('QR unavailable','QR renderer failed to load. Attendance Code remains available.','error');
+      target.innerHTML = '';
+      const payload = JSON.stringify({ v: 1, sid: data.sessionId, t: data.token });
+      new QRCode(target, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+      let remaining = Number(data.expiresInSeconds || 60);
+      const countdown = document.getElementById('attendance-qr-countdown');
+      if (countdown) countdown.textContent = `QR refreshes in about ${remaining}s`;
+    };
+    await refresh();
+    Teacher._attendanceQrTimer = setInterval(refresh, 55000);
   },
 
   async setAttendanceStatus(sessionId, studentId, status) {
