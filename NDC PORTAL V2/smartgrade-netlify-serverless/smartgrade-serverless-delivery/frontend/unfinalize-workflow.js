@@ -6,6 +6,7 @@
 
   if (typeof Teacher !== 'undefined') {
     let requestMap=new Map();
+    Teacher.unfinalizeRequestMap=requestMap;
     const originalRow=Teacher.gradebookRow?.bind(Teacher);
     const originalRender=Teacher.renderGradebook?.bind(Teacher);
 
@@ -36,8 +37,9 @@
     if(originalRender) Teacher.renderGradebook=async function(){
       const cid=Teacher.state?.classId;
       requestMap=new Map();
+      Teacher.unfinalizeRequestMap=requestMap;
       if(cid){
-        try{const rows=await api('GET',`/grades/${cid}/unfinalize-requests`);for(const r of rows||[])if(!requestMap.has(r.student_id))requestMap.set(r.student_id,r);}catch{}
+        try{const rows=await api('GET',`/grades/${cid}/unfinalize-requests`);for(const r of rows||[])if(!requestMap.has(r.student_id))requestMap.set(r.student_id,r);Teacher.unfinalizeRequestMap=requestMap;}catch{}
       }
       return originalRender();
     };
