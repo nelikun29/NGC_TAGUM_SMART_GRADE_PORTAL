@@ -26,6 +26,24 @@
     const tab=Teacher.state?.tab;
     if(tab==='gradebook')return;
 
+    // Attendance session roster is a card/list view rather than a table.
+    // Match each roster row by the student-number suffix and uppercase only
+    // the learner name text, preserving the student number and controls.
+    if(tab==='attendance'){
+      root.querySelectorAll('.space-y-2 > div').forEach(row=>{
+        const span=row.querySelector(':scope > span.font-semibold');
+        if(!span)return;
+        const number=span.querySelector('.text-slate-400');
+        const numberText=number?.textContent||'';
+        const full=span.textContent||'';
+        const name=numberText?full.slice(0,full.lastIndexOf(numberText)).trim():full.trim();
+        if(!name)return;
+        span.childNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE)n.textContent='';});
+        span.insertBefore(document.createTextNode(upper(name)+' '),number||span.firstChild);
+        span.dataset.sgStudentName='true';
+      });
+    }
+
     // Approvals render each learner name as a <b> immediately above email.
     if(tab==='approvals'){
       root.querySelectorAll('b').forEach(el=>{
