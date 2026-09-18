@@ -150,9 +150,11 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    stage = 'load_user';
+    stage = 'normalize_email';
     const normalizedEmail = String(email).trim().toLowerCase();
+    stage = 'query_user';
     const { rows } = await pool.query(`SELECT * FROM users WHERE lower(email) = $1`, [normalizedEmail]);
+    stage = 'read_user';
     const user = rows[0];
     const genericFail = () => res.status(401).json({ error: 'Invalid email or password.' });
 
