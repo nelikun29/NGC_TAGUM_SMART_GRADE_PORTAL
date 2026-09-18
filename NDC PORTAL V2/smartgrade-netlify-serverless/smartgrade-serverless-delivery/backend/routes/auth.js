@@ -170,9 +170,13 @@ router.post('/login', async (req, res, next) => {
     }
     const ok = bcrypt.compareSync(String(password), user.password_hash);
     if (!ok) {
+      const attempts = Number(user.failed_login_attempts || 0) + 1;
+      let lockedUntil = null;
+      if (attempts >= MAX_ATTEMPTS) {
+        lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString();
+      }
       stage = 'record_failed_login';
-      const lockThreshold=MAX_ATTEMPTS-1;
-      await pool.query(`UPDATE users SET failed_login_attempts=failed_login_attempts+1,locked_until=CASE WHEN failed_login_attempts >= $1 THEN now()+($2 * interval '1 minute') ELSE locked_until END,updated_at=now() WHERE id=$3`,[lockThreshold,LOCKOUT_MINUTES,user.id]);
+      await pool.query(`UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`, [attempts, lockedUntil, user.id]);
       await audit(req, { action: 'login_failed', recordType: 'user', recordId: user.id });
       return genericFail();
     }
@@ -183,7 +187,8 @@ router.post('/login', async (req, res, next) => {
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
 
     stage = 'reset_login_state';
-    await pool.query(`UPDATE users SET failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$1`,[user.id]);
+    await pool.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
+
     stage = 'load_profile';
     let profile = null;
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
