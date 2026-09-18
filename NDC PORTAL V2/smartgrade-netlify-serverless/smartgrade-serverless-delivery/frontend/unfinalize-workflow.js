@@ -69,6 +69,7 @@
       btn.innerHTML='<i class="fa-solid fa-lock-open mr-1"></i> Unfinalize';
       btn.onclick=()=>Admin.switchTab('unfinalize');
       bar.appendChild(btn);
+      if(typeof ApprovalManager!=='undefined')ApprovalManager.updateEnhancedUI();
     }
 
     if(originalRender) Admin.render=async function(){await originalRender();addUnfinalizeTab();};
