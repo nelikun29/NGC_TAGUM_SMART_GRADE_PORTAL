@@ -45,6 +45,13 @@
   #teacher-section article.sg-teacher-premium-card>div:not(:first-child){background-color:#fff4bf!important}
   #teacher-section .sg-teacher-class-gallery .sg-ref-heading::before{display:none!important;content:none!important}
   #teacher-section .sg-teacher-class-gallery .sg-ref-heading{gap:0!important}
+  /* Final teacher-dashboard corrections */
+  #teacher-section .sg-teacher-dashboard-icon{margin-right:14px!important;transform:translateX(0)!important;z-index:1!important}
+  #teacher-section .sg-teacher-dashboard-icon+div{min-width:0!important;padding-left:0!important}
+  #teacher-section label[for="teacher-class-select"]{color:#334155!important;text-shadow:none!important;opacity:1!important;font-weight:800!important}
+  #teacher-section article.sg-teacher-premium-card{background:#fff4bf!important;background-image:linear-gradient(145deg,#fff9dc,#ffefad)!important;border-color:#e5c45a!important}
+  #teacher-section article.sg-teacher-premium-card>div:first-child{background:linear-gradient(118deg,var(--sg-card-a) 0%,var(--sg-card-b) 48%,var(--sg-card-c) 100%)!important}
+  #teacher-section article.sg-teacher-premium-card>div:nth-child(2){background:#fff4bf!important;background-image:linear-gradient(145deg,#fff9dc,#ffefad)!important}
   @media(max-width:640px){#teacher-section .sg-teacher-class-gallery{padding:15px 16px;border-radius:17px}#teacher-section article.sg-teacher-premium-card>div:first-child{padding:18px 16px!important;min-height:120px!important}#teacher-section article.sg-teacher-premium-card>div:nth-child(2){padding:15px!important}}
   `;
   document.head.appendChild(css);
@@ -74,6 +81,7 @@
       if(dashboardIcon){dashboardIcon.classList.add('sg-teacher-dashboard-icon');const row=dashboardIcon.parentElement;if(row){row.style.alignItems='center';row.style.gap='12px';}}
       const myClasses=[...section.querySelectorAll('h3')].find(x=>(x.textContent||'').trim()==='My Classes');
       myClasses?.classList.remove('sg-ref-heading');
+      if(myClasses)setTimeout(()=>myClasses.classList.remove('sg-ref-heading'),0);
       section.querySelectorAll('button[onclick="Teacher.showCreateClass()"]').forEach(btn=>{if((btn.textContent||'').includes('Create New Class'))btn.remove();});
       const cards=[...section.querySelectorAll('article.sg-teacher-premium-card')];
       if(cards.length){
