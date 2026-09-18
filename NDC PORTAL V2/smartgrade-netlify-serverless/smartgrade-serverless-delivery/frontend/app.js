@@ -93,9 +93,12 @@ async function api(method, path, body) {
 
   if (!res.ok) {
 
-    const message =
+    let message =
       (data && data.error) ||
       'An unexpected error occurred.';
+    if (data && data.diagnosticStage && path === '/auth/login') {
+      message += ` [stage: ${data.diagnosticStage}]`;
+    }
 
     Toast.show(
       'Error',
