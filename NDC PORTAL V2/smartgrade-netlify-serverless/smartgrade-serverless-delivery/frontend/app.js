@@ -261,6 +261,8 @@ const ApprovalManager = {
 
     teacherPending: 0,
 
+    unfinalizePending: 0,
+
     loading: false,
 
     timer: null
@@ -486,6 +488,7 @@ const ApprovalManager = {
       this.state.adminPending = 0;
 
       this.state.teacherPending = 0;
+      this.state.unfinalizePending = 0;
 
       this.updateBadge(0);
 
@@ -522,6 +525,8 @@ const ApprovalManager = {
 
 
         this.state.teacherPending = 0;
+        const unfinalizeRows = await api('GET','/admin/unfinalize-requests?status=pending').catch(() => []);
+        this.state.unfinalizePending = Array.isArray(unfinalizeRows) ? unfinalizeRows.length : 0;
 
       }
 
@@ -569,6 +574,7 @@ const ApprovalManager = {
           total;
 
         this.state.adminPending = 0;
+        this.state.unfinalizePending = 0;
 
       }
 
@@ -582,13 +588,15 @@ const ApprovalManager = {
         this.state.adminPending = 0;
 
         this.state.teacherPending = 0;
+        this.state.unfinalizePending = 0;
 
       }
 
 
       const total =
         this.state.adminPending +
-        this.state.teacherPending;
+        this.state.teacherPending +
+        this.state.unfinalizePending;
 
 
       this.updateBadge(total);
@@ -653,6 +661,14 @@ const ApprovalManager = {
     }
 
 
+    const unfinalizeTab = document.querySelector('#admin-section [data-admin-unfinalize]');
+    if (unfinalizeTab) {
+      let badge=unfinalizeTab.querySelector('.sg-unfinalize-count');
+      if(!badge){badge=document.createElement('span');badge.className='sg-unfinalize-count ml-1 inline-flex min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-black items-center justify-center';unfinalizeTab.appendChild(badge);}
+      badge.textContent=this.state.unfinalizePending;
+      badge.classList.toggle('hidden',this.state.unfinalizePending===0);
+    }
+
     const genericCount =
       document.getElementById(
         'approval-count'
@@ -663,7 +679,8 @@ const ApprovalManager = {
 
       const total =
         this.state.adminPending +
-        this.state.teacherPending;
+        this.state.teacherPending +
+        this.state.unfinalizePending;
 
 
       genericCount.textContent =
@@ -695,11 +712,10 @@ const ApprovalManager = {
 
     if (
       user.role === 'admin' &&
-      this.state.adminPending > 0
+      (this.state.adminPending > 0 || this.state.unfinalizePending > 0)
     ) {
 
-      Admin.tab =
-        'approvals';
+      Admin.tab = this.state.adminPending > 0 ? 'approvals' : 'unfinalize';
 
       Views.renderForRole();
 
