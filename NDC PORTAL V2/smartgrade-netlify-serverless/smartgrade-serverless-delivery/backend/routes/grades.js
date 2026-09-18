@@ -15,18 +15,13 @@ async function usesDynamicGrading(classId){try{const row=(await pool.query(`SELE
 async function adjustmentContext(studentId,classId,component){
  const scheme=await getDynamicScheme(classId);
  if(!scheme)return buildAdjustmentContext(studentId,classId,component);
- if(!['attendance','quiz','performance'].includes(component))return {error:'For Dynamic Grading, examination scores must be adjusted within their individual Prelim, Midterm or Final exam records.'};
- const c=scheme.components.find(x=>x.source_type===component);
+ const c=scheme.components.find(x=>x.component_key===component||x.source_type===component);
  if(!c)return {error:`No active ${component} component exists in this grading scheme.`};
- if(c.subcomponents?.length)return {error:`${c.name} uses subcomponents and cannot be adjusted as one overall total.`};
+ const max=Number(c.max_points);
+ if(!Number.isFinite(max)||max<=0)return {error:`${c.name} Total Required Score must be configured in Weights first.`};
  const raw=await componentResult(studentId,classId,c);
- const max=Number(raw.max??c.max_points);
  const recordedTotal=Number(raw.earned??0);
- if(!Number.isFinite(max)||max<=0){
-   if(['quiz','performance'].includes(component))return {needsDenominator:true,recordedTotal:Math.round(recordedTotal*100)/100,label:'points',componentId:c.id,componentName:c.name};
-   return {error:`${c.name} Overall Total Score must be configured before manual adjustment.`};
- }
- return {recordedTotal:Math.round(recordedTotal*100)/100,max,label:component==='attendance'?'days':'points',componentId:c.id,componentName:c.name};
+ return {recordedTotal:Math.round(recordedTotal*100)/100,max,label:c.source_type==='attendance'?'days':'points',componentId:c.id,componentName:c.name,componentKey:c.component_key,sourceType:c.source_type};
 }
 async function adjustmentDelta(studentId,classId,component,newTotal){
  const ctx=await adjustmentContext(studentId,classId,component);
