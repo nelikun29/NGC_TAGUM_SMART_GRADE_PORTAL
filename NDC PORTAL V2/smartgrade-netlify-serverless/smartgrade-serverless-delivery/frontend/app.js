@@ -1427,6 +1427,15 @@ const Student = {
             ${esc(user.profile.room_number || '—')}
           </p>
 
+          <button
+            type="button"
+            onclick="Student.showEditProfile()"
+            class="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-eduBlue-700 text-sm font-bold hover:bg-blue-100 transition"
+          >
+            <i class="fa-solid fa-user-pen"></i>
+            Edit Profile
+          </button>
+
 
           <div class="mt-5 pt-4 border-t">
 
@@ -1508,6 +1517,52 @@ const Student = {
 
     `;
 
+  },
+
+
+  showEditProfile() {
+    const p = Store.user?.profile || {};
+    const host = document.createElement('div');
+    host.id = 'student-edit-profile-modal';
+    host.className = 'fixed inset-0 z-[80] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4';
+    host.innerHTML = `
+      <div class="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b">
+          <div><h3 class="font-black text-lg text-slate-800"><i class="fa-solid fa-user-pen text-eduBlue-600 mr-2"></i>Edit Profile</h3><p class="text-xs text-slate-500 mt-1">Update your student information.</p></div>
+          <button type="button" onclick="Student.closeEditProfile()" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form onsubmit="return Student.saveProfile(event)" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label class="text-xs font-bold text-slate-600">First Name<input id="student-profile-first" required value="${esc(p.first_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600">Middle Name<input id="student-profile-middle" value="${esc(p.middle_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600">Last Name<input id="student-profile-last" required value="${esc(p.last_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600">Year Level<input id="student-profile-year" required value="${esc(p.year_level || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600 sm:col-span-2">Room<input id="student-profile-room" value="${esc(p.room_number || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" onclick="Student.closeEditProfile()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold">Cancel</button><button type="submit" class="px-4 py-2 rounded-xl bg-eduBlue-600 text-white text-sm font-bold"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Changes</button></div>
+        </form>
+      </div>`;
+    document.body.appendChild(host);
+  },
+
+  closeEditProfile() {
+    document.getElementById('student-edit-profile-modal')?.remove();
+  },
+
+  async saveProfile(e) {
+    e.preventDefault();
+    try {
+      const data = await api('PUT', '/auth/profile/student', {
+        firstName: val('student-profile-first'),
+        middleName: val('student-profile-middle'),
+        lastName: val('student-profile-last'),
+        yearLevel: val('student-profile-year'),
+        roomNumber: val('student-profile-room')
+      });
+      Store.user.profile = data.profile;
+      Student.closeEditProfile();
+      Toast.show('Profile Updated', data.message || 'Your profile was updated successfully.', 'success');
+      Views.renderForRole();
+    } catch {}
+    return false;
   },
 
 
