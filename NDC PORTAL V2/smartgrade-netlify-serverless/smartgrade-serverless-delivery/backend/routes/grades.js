@@ -19,12 +19,14 @@ async function adjustmentContext(studentId,classId,component){
  if(!c)return {error:`No active ${component} component exists in this grading scheme.`};
  const max=Number(c.max_points);
  if(!Number.isFinite(max)||max<=0)return {error:`${c.name} Total Required Score must be configured in Weights first.`};
- const raw=await componentResult(studentId,classId,c);
- // The manual-adjustment denominator is the authoritative class-level Total Required Score from Weights.
- // Do not use the source assessment denominator here, otherwise components with no encoded quiz/task/exam rows disappear.
- const sourceMax=Number(raw.max);
- const sourceEarned=Number(raw.earned??0);
- const recordedTotal=Number.isFinite(sourceMax)&&sourceMax>0?Math.round((sourceEarned/sourceMax)*max*100)/100:0;
+ let recordedTotal=0;
+ try {
+   const raw=await componentResult(studentId,classId,c);
+   // Existing source records are optional for this end-of-semester manual-total workflow.
+   // If the source calculator has no configured denominator/records, the component must still appear.
+   const sourceMax=Number(raw?.max),sourceEarned=Number(raw?.earned??0);
+   recordedTotal=Number.isFinite(sourceMax)&&sourceMax>0?Math.round((sourceEarned/sourceMax)*max*100)/100:0;
+ } catch (_) { recordedTotal=0; }
  return {recordedTotal:Math.round(recordedTotal*100)/100,max,label:c.source_type==='attendance'?'days':'points',componentId:c.id,componentName:c.name,componentKey:c.component_key,sourceType:c.source_type};
 }
 async function adjustmentDelta(studentId,classId,component,newTotal){
