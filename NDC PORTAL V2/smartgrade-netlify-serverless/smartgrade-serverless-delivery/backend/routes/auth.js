@@ -143,29 +143,20 @@ router.put('/profile/student', authenticate, requireStudentRole, async (req, res
 // second express-rate-limit middleware here is redundant and can fail before
 // the route handler executes in the Netlify serverless request environment.
 router.post('/login', async (req, res, next) => {
-  let stage = 'validate_request';
   try {
     const { email, password } = req.body || {};
     if (!isNonEmptyString(String(email || '')) || !isNonEmptyString(String(password || ''))) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
-
-    stage = 'normalize_email';
     const normalizedEmail = String(email).trim().toLowerCase();
-    stage = 'query_user';
     const { rows } = await pool.query(`SELECT * FROM users WHERE lower(email) = $1`, [normalizedEmail]);
-    stage = 'read_user';
     const user = rows[0];
     const genericFail = () => res.status(401).json({ error: 'Invalid email or password.' });
 
     if (!user) return genericFail();
-
-    stage = 'check_lock';
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
       return res.status(423).json({ error: `Account temporarily locked due to repeated failed logins. Try again after ${user.locked_until}.` });
     }
-
-    stage = 'verify_password';
     if (typeof user.password_hash !== 'string' || !user.password_hash) {
       console.error('[auth/login] Invalid password hash for user', user.id);
       return res.status(500).json({ error: 'Unable to complete login. Please contact an administrator.' });
@@ -177,28 +168,18 @@ router.post('/login', async (req, res, next) => {
       if (attempts >= MAX_ATTEMPTS) {
         lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString();
       }
-      stage = 'record_failed_login';
       await pool.query(`UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`, [attempts, lockedUntil, user.id]);
       await audit(req, { action: 'login_failed', recordType: 'user', recordId: user.id });
       return genericFail();
     }
-
-    stage = 'check_account_status';
     if (!user.is_active) return res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' });
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
-
-    stage = 'reset_login_state';
     await pool.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
-
-    stage = 'load_profile';
     let profile = null;
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
     if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
-
-    stage = 'sign_token';
     const token = signToken(user);
-    stage = 'audit_success';
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
   } catch (e) {
@@ -206,7 +187,7 @@ router.post('/login', async (req, res, next) => {
     console.error('Stage:', stage);
     console.error('Message:', e && e.message ? e.message : e);
     console.error('Stack:', e && e.stack ? e.stack : e);
-    return res.status(500).json({ error: 'Unable to complete login. Please try again.', diagnosticStage: stage });
+    return res.status(500).json({ error: 'Unable to complete login. Please try again.' });
   }
 });
 
