@@ -7,11 +7,11 @@ router.use(authenticate);
 
 const num=v=>v===null||v===undefined||v===''?null:Number(v);
 async function schemeFor(classId){return (await pool.query('SELECT * FROM grading_schemes WHERE class_id=$1',[classId])).rows[0];}
-async function configuredTotals(classId){
-  const quiz=Number((await pool.query('SELECT COALESCE(SUM(total_items),0) n FROM quizzes WHERE class_id=$1',[classId])).rows[0].n);
-  const performance=Number((await pool.query('SELECT COALESCE(SUM(max_score),0) n FROM performance_tasks WHERE class_id=$1',[classId])).rows[0].n);
-  const exams=(await pool.query(`SELECT exam_type,COALESCE(SUM(max_score),0) n FROM examinations WHERE class_id=$1 GROUP BY exam_type`,[classId])).rows;
-  let custom={};try{const rows=(await pool.query(`SELECT component_id,COALESCE(SUM(max_score),0) n FROM custom_assessments WHERE class_id=$1 GROUP BY component_id`,[classId])).rows;custom=Object.fromEntries(rows.map(r=>[r.component_id,Number(r.n)]));}catch(e){if(e.code!=='42P01')throw e;}
+async function configuredTotals(classId,db=pool){
+  const quiz=Number((await db.query('SELECT COALESCE(SUM(total_items),0) n FROM quizzes WHERE class_id=$1',[classId])).rows[0].n);
+  const performance=Number((await db.query('SELECT COALESCE(SUM(max_score),0) n FROM performance_tasks WHERE class_id=$1',[classId])).rows[0].n);
+  const exams=(await db.query(`SELECT exam_type,COALESCE(SUM(max_score),0) n FROM examinations WHERE class_id=$1 GROUP BY exam_type`,[classId])).rows;
+  let custom={};try{const rows=(await db.query(`SELECT component_id,COALESCE(SUM(max_score),0) n FROM custom_assessments WHERE class_id=$1 GROUP BY component_id`,[classId])).rows;custom=Object.fromEntries(rows.map(r=>[r.component_id,Number(r.n)]));}catch(e){if(e.code!=='42P01')throw e;}
   return {quiz,performance,exams:Object.fromEntries(exams.map(r=>[String(r.exam_type||'').toLowerCase(),Number(r.n)])),custom};
 }
 router.get('/:classId',requireClassOwnership,async(req,res,next)=>{try{
@@ -22,10 +22,10 @@ router.get('/:classId',requireClassOwnership,async(req,res,next)=>{try{
 }catch(e){next(e);}});
 
 router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,async(req,res,next)=>{const client=await pool.connect();try{
-  const scheme=(await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE',[req.params.classId])).rows[0];if(!scheme)return res.status(404).json({error:'Grading scheme not found.'});
-  if(scheme.state==='finalized')return res.status(409).json({error:'Finalized grading configuration is locked. Reopen it for revision first.'});
-  const totals=await configuredTotals(req.params.classId);const items=Array.isArray(req.body.components)?req.body.components:[];
   await client.query('BEGIN');
+  const scheme=(await client.query('SELECT * FROM grading_schemes WHERE class_id=$1 FOR UPDATE',[req.params.classId])).rows[0];if(!scheme){await client.query('ROLLBACK');return res.status(404).json({error:'Grading scheme not found.'});}
+  if(scheme.state==='finalized'){await client.query('ROLLBACK');return res.status(409).json({error:'Finalized grading configuration is locked. Reopen it for revision first.'});}
+  const totals=await configuredTotals(req.params.classId,client);const items=Array.isArray(req.body.components)?req.body.components:[];
   for(const item of items){
     const c=(await client.query('SELECT * FROM grading_components WHERE id=$1 AND scheme_id=$2',[item.id,scheme.id])).rows[0];if(!c)continue;
     if(['quiz','performance','custom'].includes(c.source_type)){
