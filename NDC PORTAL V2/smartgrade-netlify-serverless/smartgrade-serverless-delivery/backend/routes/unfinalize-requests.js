@@ -51,8 +51,8 @@ router.post('/:requestId/approve', async (req, res, next) => {
     if (!grade || !['finalized','released'].includes(grade.status)) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'The learner grade is no longer finalized or released.' }); }
     await client.query("UPDATE grade_status SET status='in_progress', finalized_by=NULL, finalized_at=NULL, released_at=NULL WHERE student_id=$1 AND class_id=$2", [request.student_id, request.class_id]);
     await client.query("UPDATE grade_unfinalize_requests SET status='approved', reviewed_by=$1, reviewed_at=now(), admin_note=$2 WHERE id=$3", [req.user.id, note, request.id]);
+    await client.query(`INSERT INTO audit_log(id,user_id,role,action,record_type,record_id,previous_value,new_value,ip_address,user_agent,created_at) VALUES($1,$2,$3,'grade_unfinalize_approved','grade_unfinalize_request',$4,$5,$6,$7,$8,now())`,[require('crypto').randomUUID(),req.user.id,req.user.role,request.id,JSON.stringify(grade.status),JSON.stringify({status:'in_progress',adminNote:note}),req.ip,req.headers['user-agent']||null]);
     await client.query('COMMIT');
-    await audit(req, { action:'grade_unfinalize_approved', recordType:'grade_unfinalize_request', recordId:request.id, previousValue:grade.status, newValue:'in_progress' });
     res.json({ message: 'Request approved. The learner grade is now In Progress and can be corrected by the teacher.' });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
@@ -70,8 +70,8 @@ router.post('/:requestId/reject', async (req, res, next) => {
     if (!request) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Unfinalize request not found.' }); }
     if (request.status !== 'pending') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This request has already been reviewed.' }); }
     await client.query("UPDATE grade_unfinalize_requests SET status='rejected', reviewed_by=$1, reviewed_at=now(), admin_note=$2 WHERE id=$3", [req.user.id, note, request.id]);
+    await client.query(`INSERT INTO audit_log(id,user_id,role,action,record_type,record_id,previous_value,new_value,ip_address,user_agent,created_at) VALUES($1,$2,$3,'grade_unfinalize_rejected','grade_unfinalize_request',$4,NULL,$5,$6,$7,now())`,[require('crypto').randomUUID(),req.user.id,req.user.role,request.id,JSON.stringify({status:'rejected',note}),req.ip,req.headers['user-agent']||null]);
     await client.query('COMMIT');
-    await audit(req, { action:'grade_unfinalize_rejected', recordType:'grade_unfinalize_request', recordId:request.id, newValue:{status:'rejected',note} });
     res.json({ message: 'Unfinalize request rejected. The learner grade remains locked.' });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
