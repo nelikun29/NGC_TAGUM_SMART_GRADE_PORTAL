@@ -4498,7 +4498,7 @@ ${esc(
   //
   // Backed by:
   //   GET    /grades/:classId/students/:studentId/adjustments
-  //   PUT    /grades/:classId/students/:studentId/adjustments/:component
+  //   PUT    /grades/:classId/students/:studentId/adjustments (atomic batch)
   //   DELETE /grades/:classId/students/:studentId/adjustments/:component
   //
   // The server always validates the new total against that component's
@@ -4583,7 +4583,7 @@ ${esc(
     const reason = (document.getElementById('adj-reason') || {}).value || '';
     const cid = Teacher.state.classId;
     try {
-      const result = await api('PUT', `/grades/${cid}/students/${studentId}/adjustments/${component}`, { newTotal, reason });
+      const result = await api('PUT', `/grades/${cid}/students/${studentId}/adjustments`, { adjustments: { [component]: newTotal }, reason });
       Toast.show('Adjusted', result.message || 'Total adjusted.', 'success');
       Teacher.closeAdjustmentModal();
       Teacher.renderGradebook();
