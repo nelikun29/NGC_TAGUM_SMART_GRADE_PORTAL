@@ -1,15 +1,15 @@
 -- Teacher -> Admin workflow for reopening finalized/released learner grades.
 -- Additive and backward-compatible: no existing grade records are modified.
 CREATE TABLE IF NOT EXISTS grade_unfinalize_requests (
-  id UUID PRIMARY KEY,
-  class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
-  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  teacher_id UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  class_id TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  teacher_id TEXT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
   requested_status TEXT NOT NULL CHECK (requested_status IN ('finalized','released')),
   reason TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
   requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  reviewed_by UUID REFERENCES users(id),
+  reviewed_by TEXT REFERENCES users(id),
   reviewed_at TIMESTAMPTZ,
   admin_note TEXT
 );
