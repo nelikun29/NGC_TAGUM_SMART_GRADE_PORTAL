@@ -13,6 +13,7 @@ const customAssessmentRoutes=require('./routes/custom-assessments');
 const gradeRoutes=require('./routes/grades');
 const gradeExportRoutes=require('./routes/grade-export');
 const adminRoutes=require('./routes/admin');
+const unfinalizeRequestRoutes=require('./routes/unfinalize-requests');
 const reportRoutes=require('./routes/reports');
 const classManagementRoutes=require('./routes/class-management');
 const gradingSchemeRoutes=require('./routes/grading-schemes');
@@ -36,5 +37,5 @@ router.use(rateLimit({
     return 'netlify-client';
   }
 }));
-router.use('/auth',authRoutes);router.use('/classes',classRoutes);router.use('/attendance',attendanceRoutes);router.use('/assessments',assessmentGuard,assessmentRoutes);router.use('/assessments',assessmentManagementRoutes);router.use('/custom-assessments',customAssessmentRoutes);router.use('/grades',gradeRoutes);router.use('/grade-export',gradeExportRoutes);router.use('/admin',adminRoutes);router.use('/reports',reportRoutes);router.use('/grading-schemes',gradingSchemeRoutes);router.use('/grading-denominators',gradingDenominatorRoutes);router.use('/',classManagementRoutes);
+router.use('/auth',authRoutes);router.use('/classes',classRoutes);router.use('/attendance',attendanceRoutes);router.use('/assessments',assessmentGuard,assessmentRoutes);router.use('/assessments',assessmentManagementRoutes);router.use('/custom-assessments',customAssessmentRoutes);router.use('/grades',gradeRoutes);router.use('/grade-export',gradeExportRoutes);router.use('/admin/unfinalize-requests',unfinalizeRequestRoutes);router.use('/admin',adminRoutes);router.use('/reports',reportRoutes);router.use('/grading-schemes',gradingSchemeRoutes);router.use('/grading-denominators',gradingDenominatorRoutes);router.use('/',classManagementRoutes);
 router.get('/health',(req,res)=>res.json({status:'ok',time:new Date().toISOString()}));router.get('/config',(req,res)=>res.json({institutionName:process.env.INSTITUTION_NAME||'Smart Grade & Attendance Portal'}));router.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'An unexpected server error occurred.'});});module.exports=router;
