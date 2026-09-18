@@ -15,7 +15,7 @@
     try {
       await loadScript('./teacher-grading-controls.js');
       await loadScript('./dynamic-grading-ui.js');
-      await loadScript('./grading-denominators-ui.js');
+      // Assessment denominators are now configured exclusively in the Weights editor.
       await loadScript('./admin-role-correction.js');
       await loadScript('./quiz-create-fix.js');
       await loadScript('./reference-dashboard-theme.js');
