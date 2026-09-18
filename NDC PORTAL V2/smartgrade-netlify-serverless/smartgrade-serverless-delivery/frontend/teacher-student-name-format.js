@@ -7,7 +7,8 @@
   style.id='sg-teacher-student-uppercase';
   style.textContent=`
     #teacher-grade-table tbody td:first-child,
-    #teacher-tab-content [data-sg-student-name]{
+    #teacher-tab-content [data-sg-student-name],
+    #teacher-tab-content .sg-attendance-roster-name{
       text-transform:uppercase!important;
       letter-spacing:.012em;
     }
