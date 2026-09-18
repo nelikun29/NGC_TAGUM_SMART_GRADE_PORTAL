@@ -20,6 +20,15 @@ function isSessionUsable(session) {
   return true;
 }
 
+async function learnerGradeLocked(classId, studentId) {
+  const row = (await pool.query(`SELECT status FROM grade_status WHERE class_id = $1 AND student_id = $2`, [classId, studentId])).rows[0];
+  return !!row && ['finalized', 'released'].includes(row.status);
+}
+
+async function classHasLockedGrades(classId) {
+  return (await pool.query(`SELECT EXISTS(SELECT 1 FROM grade_status WHERE class_id = $1 AND status IN ('finalized','released')) AS locked`, [classId])).rows[0].locked;
+}
+
 // ---------- LIST SESSIONS FOR A CLASS ----------
 router.get('/sessions', requireRole('teacher', 'admin'), requireClassOwnership, async (req, res, next) => {
   try {
@@ -71,6 +80,7 @@ router.post('/sessions', requireRole('teacher', 'admin'), requireClassOwnership,
   try {
     const { classId, sessionDate } = req.body;
     if (!sessionDate) return res.status(400).json({ error: 'sessionDate is required.' });
+    if (await classHasLockedGrades(classId)) return res.status(409).json({ error: 'A new attendance session cannot be opened while this class has finalized or released grades. Reopen the affected grades first.' });
 
     let code, exists = true;
     while (exists) {
@@ -121,6 +131,7 @@ router.post('/submit', requireRole('student'), async (req, res, next) => {
 
     const enrolled = (await pool.query(`SELECT 1 FROM enrollments WHERE student_id = $1 AND class_id = $2 AND status = 'active'`, [req.user.id, session.class_id])).rows[0];
     if (!enrolled) return res.status(403).json({ error: 'You are not enrolled in this class.' });
+    if (await learnerGradeLocked(session.class_id, req.user.id)) return res.status(409).json({ error: 'Your grade for this class is finalized or released, so attendance can no longer be changed unless an administrator reopens the grade.' });
 
     const dup = (await pool.query(`SELECT 1 FROM attendance_records WHERE session_id = $1 AND student_id = $2`, [session.id, req.user.id])).rows[0];
     if (dup) return res.status(409).json({ error: 'Attendance has already been recorded for this session.' });
@@ -147,6 +158,9 @@ router.put('/sessions/:sessionId/records/:studentId', requireRole('teacher', 'ad
       const cls = (await pool.query(`SELECT teacher_id FROM classes WHERE id = $1`, [session.class_id])).rows[0];
       if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
     }
+    const enrolled = (await pool.query(`SELECT 1 FROM enrollments WHERE student_id = $1 AND class_id = $2 AND status = 'active'`, [req.params.studentId, session.class_id])).rows[0];
+    if (!enrolled) return res.status(400).json({ error: 'Student is not actively enrolled in this class.' });
+    if (await learnerGradeLocked(session.class_id, req.params.studentId)) return res.status(409).json({ error: 'This learner grade is finalized or released. An administrator must reopen the grade before attendance can be changed.' });
 
     const existing = (await pool.query(`SELECT * FROM attendance_records WHERE session_id = $1 AND student_id = $2`, [session.id, req.params.studentId])).rows[0];
     if (existing) {
@@ -169,6 +183,12 @@ router.get('/sessions/:sessionId', async (req, res, next) => {
     if (req.user.role === 'teacher') {
       const cls = (await pool.query(`SELECT teacher_id FROM classes WHERE id = $1`, [session.class_id])).rows[0];
       if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+    }
+    if (req.user.role === 'student') {
+      const enrolled = (await pool.query(`SELECT 1 FROM enrollments WHERE student_id = $1 AND class_id = $2 AND status = 'active'`, [req.user.id, session.class_id])).rows[0];
+      if (!enrolled) return res.status(403).json({ error: 'You are not authorized to access this attendance session.' });
+      const rows = (await pool.query(`SELECT ar.*, s.first_name, s.last_name, s.student_number FROM attendance_records ar JOIN students s ON s.id = ar.student_id WHERE ar.session_id = $1 AND ar.student_id = $2`, [session.id, req.user.id])).rows;
+      return res.json({ session, records: rows });
     }
     const { rows } = await pool.query(`
       SELECT ar.*, s.first_name, s.last_name, s.student_number FROM attendance_records ar
