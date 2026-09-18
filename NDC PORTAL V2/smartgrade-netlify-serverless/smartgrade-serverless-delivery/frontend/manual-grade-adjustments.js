@@ -39,14 +39,15 @@
       if(reason.length<5){Toast.show('Reason required','Please enter at least 5 characters explaining the adjustment.','error');return;}
       const btn=e.currentTarget;btn.disabled=true;
       try{
-        const cards=[...overlay.querySelectorAll('.sg-adjust-card[data-component]')];
+        const cards=[...overlay.querySelectorAll('.sg-adjust-card[data-component]')],adjustments={};
         for(const card of cards){
           const k=card.dataset.component,value=Number(card.querySelector('.sg-adjust-value')?.value),max=Number(card.querySelector('.sg-adjust-value')?.max);
-          if(!Number.isFinite(value))continue;
+          if(!Number.isFinite(value)){Toast.show('Invalid Score',`${labels[k]||k} requires a numeric score.`,'error');return;}
           if(value<0||value>max){Toast.show('Invalid Score',`${labels[k]||k} must be from 0 to ${max}.`,'error');return;}
-          await api('PUT',`/grades/${classId}/students/${row.studentId}/adjustments/${k}`,{newTotal:value,reason});
+          adjustments[k]=value;
         }
-        Toast.show('Saved','Overall score adjustments saved successfully.','success');overlay.remove();await Teacher.renderGradebook();
+        await api('PUT',`/grades/${classId}/students/${row.studentId}/adjustments`,{adjustments,reason});
+        Toast.show('Saved','All overall score adjustments were saved together successfully.','success');overlay.remove();await Teacher.renderGradebook();
       }catch{}finally{if(btn.isConnected)btn.disabled=false;}
     });
   }
