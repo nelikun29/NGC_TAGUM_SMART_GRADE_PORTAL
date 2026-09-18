@@ -189,8 +189,11 @@ router.post('/login', async (req, res, next) => {
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
   } catch (e) {
-    console.error(`[auth/login] stage=${stage}`, e && e.stack ? e.stack : e);
-    next(e);
+    console.error('=== LOGIN FAILURE ===');
+    console.error('Stage:', stage);
+    console.error('Message:', e && e.message ? e.message : e);
+    console.error('Stack:', e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: 'Login failed.', stage });
   }
 });
 
