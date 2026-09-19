@@ -43,7 +43,6 @@ router.post('/register/student', async (req, res, next) => {
 
     const client = await pool.connect();
     try {
-      client=await pool.connect();
       await client.query('BEGIN');
       await client.query(
         `INSERT INTO users (id, role, email, password_hash, approval_status) VALUES ($1, 'student', $2, $3, 'approved')`,
@@ -238,7 +237,6 @@ router.post('/login', async (req, res, next) => {
     res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
   } catch (e) {
     console.error('=== LOGIN FAILURE ===');
-    console.error('Stage:', stage);
     console.error('Message:', e && e.message ? e.message : e);
     console.error('Stack:', e && e.stack ? e.stack : e);
     return res.status(500).json({ error: 'Unable to complete login. Please try again.' });
