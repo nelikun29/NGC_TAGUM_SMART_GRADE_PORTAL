@@ -1,11 +1,13 @@
 // Google Form attendance import remains intentionally disabled.
 // Load role-specific enhancements after all existing static application scripts have finished.
 (() => {
+  const ASSET_VERSION = '20260920-admin-users-v2';
   async function loadScript(src) {
-    if (document.querySelector(`script[src="${src}"]`)) return;
+    const cleanSrc = String(src).split('?')[0];
+    if ([...document.scripts].some(s => String(s.getAttribute('src') || '').split('?')[0] === cleanSrc)) return;
     await new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = src;
+      s.src = cleanSrc + '?v=' + encodeURIComponent(ASSET_VERSION);
       s.onload = resolve;
       s.onerror = reject;
       document.body.appendChild(s);
