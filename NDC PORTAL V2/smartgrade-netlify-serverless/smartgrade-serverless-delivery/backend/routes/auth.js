@@ -32,10 +32,28 @@ router.post('/register/student', async (req, res, next) => {
     if (!isEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
     if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
-    const dupId = await pool.query(`SELECT id FROM students WHERE student_number = $1`, [studentNumber]);
+    const dupId = await pool.query(`SELECT id FROM students WHERE student_number = $1`, [String(studentNumber).trim()]);
     if (dupId.rows[0]) return res.status(409).json({ error: 'This Student ID is already registered.' });
 
-    const dupEmail = await pool.query(`SELECT id FROM users WHERE email = $1`, [email]);
+    const normalizedFirst = String(firstName).trim();
+    const normalizedMiddle = String(middleName || '').trim();
+    const normalizedLast = String(lastName).trim();
+    const dupName = await pool.query(
+      `SELECT id, student_number
+       FROM students
+       WHERE LOWER(BTRIM(first_name)) = LOWER($1)
+         AND LOWER(BTRIM(COALESCE(middle_name, ''))) = LOWER($2)
+         AND LOWER(BTRIM(last_name)) = LOWER($3)
+       LIMIT 1`,
+      [normalizedFirst, normalizedMiddle, normalizedLast]
+    );
+    if (dupName.rows[0]) {
+      return res.status(409).json({
+        error: 'A student account with the same full name is already registered. Please use the existing account or contact the administrator.'
+      });
+    }
+
+    const dupEmail = await pool.query(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, [String(email).trim()]);
     if (dupEmail.rows[0]) return res.status(409).json({ error: 'This email is already registered.' });
 
     const id = crypto.randomUUID();
