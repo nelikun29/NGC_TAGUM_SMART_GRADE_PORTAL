@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { pool } = require('../db');
-const { JWT_SECRET, authenticate } = require('../middleware/auth');
+const { JWT_SECRET, authenticate, requireRole } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
 const { isNonEmptyString, isEmail } = require('../utils/validate');
 
@@ -135,6 +135,60 @@ router.put('/profile/student', authenticate, requireStudentRole, async (req, res
       newValue:{first_name:updated.first_name,middle_name:updated.middle_name,last_name:updated.last_name,year_level:updated.year_level,room_number:updated.room_number} });
     res.json({ message:'Profile updated successfully.', profile:updated });
   } catch (e) { next(e); }
+});
+
+// ---------- ADMIN-ASSISTED PASSWORD RESET ----------
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const normalizedEmail = String((req.body || {}).email || '').trim().toLowerCase();
+    const generic = { message: 'If this email is registered, a password-reset request has been submitted for administrator review.' };
+    if (!isEmail(normalizedEmail)) return res.json(generic);
+    const user = (await pool.query('SELECT id FROM users WHERE lower(email)=$1', [normalizedEmail])).rows[0];
+    if (!user) return res.json(generic);
+    const existing = (await pool.query("SELECT id FROM password_reset_requests WHERE user_id=$1 AND status='pending'", [user.id])).rows[0];
+    if (!existing) await pool.query("INSERT INTO password_reset_requests(id,user_id,status) VALUES($1,$2,'pending')", [crypto.randomUUID(), user.id]);
+    res.json(generic);
+  } catch (e) { next(e); }
+});
+
+router.get('/password-reset-requests', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT pr.id,pr.requested_at,u.id AS user_id,u.email,u.role,
+             COALESCE(s.first_name,t.first_name,'') AS first_name,
+             COALESCE(s.last_name,t.last_name,'') AS last_name
+      FROM password_reset_requests pr JOIN users u ON u.id=pr.user_id
+      LEFT JOIN students s ON s.id=u.id LEFT JOIN teachers t ON t.id=u.id
+      WHERE pr.status='pending' ORDER BY pr.requested_at ASC
+    `);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
+router.post('/password-reset-requests/:requestId/complete', authenticate, requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const newPassword = String((req.body || {}).newPassword || '');
+    if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    await client.query('BEGIN');
+    const request = (await client.query("SELECT * FROM password_reset_requests WHERE id=$1 AND status='pending' FOR UPDATE", [req.params.requestId])).rows[0];
+    if (!request) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pending password reset request not found.' }); }
+    const hash = bcrypt.hashSync(newPassword, 12);
+    await client.query('UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$2', [hash, request.user_id]);
+    await client.query("UPDATE password_reset_requests SET status='completed',resolved_at=now(),resolved_by=$1 WHERE id=$2", [req.user.id, request.id]);
+    await client.query('COMMIT');
+    try { await audit(req,{action:'password_reset_admin',recordType:'user',recordId:request.user_id,newValue:{reset:true,loginLockCleared:true}}); } catch(e) { console.error('[auth/password-reset] audit failed',e); }
+    res.json({ message: 'Password reset successfully. The account login lock was also cleared.' });
+  } catch(e) { try{await client.query('ROLLBACK');}catch{} next(e); } finally { client.release(); }
+});
+
+router.post('/password-reset-requests/:requestId/dismiss', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const row=(await pool.query("UPDATE password_reset_requests SET status='dismissed',resolved_at=now(),resolved_by=$1 WHERE id=$2 AND status='pending' RETURNING user_id",[req.user.id,req.params.requestId])).rows[0];
+    if(!row)return res.status(404).json({error:'Pending password reset request not found.'});
+    try { await audit(req,{action:'password_reset_dismissed',recordType:'user',recordId:row.user_id}); } catch(e) { console.error('[auth/password-reset] audit failed',e); }
+    res.json({message:'Password reset request dismissed.'});
+  } catch(e){next(e);}
 });
 
 // ---------- LOGIN ----------
