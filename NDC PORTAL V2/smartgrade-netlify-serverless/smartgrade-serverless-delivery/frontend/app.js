@@ -7132,39 +7132,20 @@ const Admin = {
 
                 <td>
 
-                  ${
-                    u.is_active
+                  <div class="flex flex-wrap gap-3">
+                    <button
+                      onclick="Admin.resetPassword('${u.id}', '${esc(u.email)}')"
+                      class="text-xs font-bold text-blue-600"
+                    >
+                      Reset Password
+                    </button>
 
-                      ? `
-
-                        <button
-                          onclick="Admin.deactivate('${u.id}')"
-                          class="text-xs
-                                 font-bold
-                                 text-red-600"
-                        >
-
-                          Deactivate
-
-                        </button>
-
-                      `
-
-                      : `
-
-                        <button
-                          onclick="Admin.reactivate('${u.id}')"
-                          class="text-xs
-                                 font-bold
-                                 text-emerald-600"
-                        >
-
-                          Reactivate
-
-                        </button>
-
-                      `
-                  }
+                    ${
+                      u.is_active
+                        ? `<button onclick="Admin.deactivate('${u.id}')" class="text-xs font-bold text-red-600">Deactivate</button>`
+                        : `<button onclick="Admin.reactivate('${u.id}')" class="text-xs font-bold text-emerald-600">Reactivate</button>`
+                    }
+                  </div>
 
                 </td>
 
@@ -7180,6 +7161,16 @@ const Admin = {
 
     `;
 
+  },
+
+
+  async resetPassword(id, email) {
+    const m = document.createElement('div');
+    m.className = 'fixed inset-0 z-[160] flex items-center justify-center p-4';
+    m.innerHTML = `<div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" data-close></div><div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-5"><h3 class="text-lg font-black text-slate-800">Reset Password</h3><p class="text-sm text-slate-500 mt-1">Account: ${esc(email || '')}</p><form class="mt-4 space-y-3"><input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="New password (minimum 8 characters)" class="w-full px-3 py-3 rounded-xl border border-slate-300 text-sm"><input name="confirm" type="password" autocomplete="new-password" minlength="8" required placeholder="Confirm new password" class="w-full px-3 py-3 rounded-xl border border-slate-300 text-sm"><div class="flex gap-2"><button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">Reset Password</button><button type="button" data-close class="px-4 py-3 text-sm font-bold text-slate-500">Cancel</button></div></form></div>`;
+    document.body.appendChild(m);
+    const close=()=>m.remove();m.querySelectorAll('[data-close]').forEach(x=>x.onclick=close);
+    m.querySelector('form').onsubmit=async e=>{e.preventDefault();const p=e.target.password.value;const confirm=e.target.confirm.value;if(p.length<8){Toast.show('Invalid Password','Password must be at least 8 characters.','error');return;}if(p!==confirm){Toast.show('Passwords Do Not Match','Please enter the same password twice.','error');return;}try{await api('POST',`/admin/users/${id}/reset-password`,{newPassword:p});Toast.show('Password Reset','Password updated and login lock cleared.','success');close();}catch{}};
   },
 
 
