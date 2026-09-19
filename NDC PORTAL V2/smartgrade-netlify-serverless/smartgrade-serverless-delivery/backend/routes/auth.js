@@ -32,29 +32,20 @@ router.post('/register/student', async (req, res, next) => {
     if (!isEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
     if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
-    const dupId = await pool.query(`SELECT id FROM students WHERE student_number = $1`, [String(studentNumber).trim()]);
-    if (dupId.rows[0]) return res.status(409).json({ error: 'This Student ID is already registered.' });
-
+    const normalizedStudentNumber = String(studentNumber).trim();
+    const normalizedEmail = String(email).trim().toLowerCase();
     const normalizedFirst = String(firstName).trim();
     const normalizedMiddle = String(middleName || '').trim();
     const normalizedLast = String(lastName).trim();
-    const dupName = await pool.query(
-      `SELECT id, student_number
-       FROM students
-       WHERE LOWER(BTRIM(first_name)) = LOWER($1)
-         AND LOWER(BTRIM(COALESCE(middle_name, ''))) = LOWER($2)
-         AND LOWER(BTRIM(last_name)) = LOWER($3)
-       LIMIT 1`,
-      [normalizedFirst, normalizedMiddle, normalizedLast]
-    );
-    if (dupName.rows[0]) {
-      return res.status(409).json({
-        error: 'A student account with the same full name is already registered. Please use the existing account or contact the administrator.'
-      });
-    }
 
-    const dupEmail = await pool.query(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, [String(email).trim()]);
+    const dupId = await pool.query(`SELECT id FROM students WHERE student_number = $1`, [normalizedStudentNumber]);
+    if (dupId.rows[0]) return res.status(409).json({ error: 'This Student ID is already registered.' });
+
+    const dupEmail = await pool.query(`SELECT id FROM users WHERE LOWER(BTRIM(email)) = $1`, [normalizedEmail]);
     if (dupEmail.rows[0]) return res.status(409).json({ error: 'This email is already registered.' });
+
+    let possibleDuplicate = null;
+    let verificationStatus = 'verified';
 
     const id = crypto.randomUUID();
     const hash = bcrypt.hashSync(password, 12);
@@ -62,15 +53,44 @@ router.post('/register/student', async (req, res, next) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const normalizedNameKey = [normalizedFirst, normalizedMiddle, normalizedLast].join('|').toLowerCase();
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [normalizedNameKey]);
+      possibleDuplicate = (await client.query(
+        `SELECT id, student_number
+         FROM students
+         WHERE LOWER(BTRIM(first_name)) = LOWER($1)
+           AND LOWER(BTRIM(COALESCE(middle_name, ''))) = LOWER($2)
+           AND LOWER(BTRIM(last_name)) = LOWER($3)
+         LIMIT 1`,
+        [normalizedFirst, normalizedMiddle, normalizedLast]
+      )).rows[0] || null;
+      verificationStatus = possibleDuplicate ? 'possible_duplicate' : 'verified';
       await client.query(
-        `INSERT INTO users (id, role, email, password_hash, approval_status) VALUES ($1, 'student', $2, $3, 'approved')`,
-        [id, email, hash]
+        `INSERT INTO users (
+           id, role, email, password_hash, approval_status,
+           account_verification_status, verification_note
+         ) VALUES ($1, 'student', $2, $3, 'approved', $4, $5)`,
+        [
+          id,
+          normalizedEmail,
+          hash,
+          verificationStatus,
+          possibleDuplicate ? 'Exact full-name match requires administrator review.' : null
+        ]
       );
       await client.query(
         `INSERT INTO students (id, student_number, first_name, middle_name, last_name, year_level, room_number)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, studentNumber, firstName, middleName || null, lastName, yearLevel, roomNumber || null]
+        [id, normalizedStudentNumber, normalizedFirst, normalizedMiddle || null, normalizedLast, String(yearLevel).trim(), String(roomNumber || '').trim() || null]
       );
+      if (possibleDuplicate) {
+        await client.query(
+          `INSERT INTO student_duplicate_reviews(
+             id,candidate_user_id,matched_user_id,status,match_reason
+           ) VALUES($1,$2,$3,'pending','exact_full_name')`,
+          [crypto.randomUUID(), id, possibleDuplicate.id]
+        );
+      }
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -79,8 +99,18 @@ router.post('/register/student', async (req, res, next) => {
       client.release();
     }
 
-    await audit(req, { action: 'student_registration', recordType: 'student', recordId: id, newValue: { studentNumber, email } });
-    res.status(201).json({ message: 'Registration successful. You may now log in.' });
+    await audit(req, {
+      action: possibleDuplicate ? 'student_registration_flagged' : 'student_registration',
+      recordType: 'student',
+      recordId: id,
+      newValue: { studentNumber: normalizedStudentNumber, email: normalizedEmail, verificationStatus }
+    });
+    res.status(201).json({
+      message: possibleDuplicate
+        ? 'Registration received. You may sign in, but academic access will remain restricted until an administrator verifies the possible duplicate.'
+        : 'Registration successful. You may now log in.',
+      verificationStatus
+    });
   } catch (e) {
     if (e && e.code === '23505') {
       const constraint=String(e.constraint||'');
@@ -89,6 +119,38 @@ router.post('/register/student', async (req, res, next) => {
     }
     next(e);
   }
+});
+
+// ---------- STUDENT ID CLAIM ----------
+// Used only when an official Student ID is already attached to another
+// account. The claimant receives a restricted placeholder profile until an
+// administrator verifies ownership and resolves the current holder's records.
+router.post('/student-id-claims', async (req,res,next) => {
+  const client=await pool.connect();
+  try{
+    const {studentNumber,firstName,middleName,lastName,yearLevel,roomNumber,email,password}=req.body||{};
+    if(![studentNumber,firstName,lastName,yearLevel,email,password].every(v=>isNonEmptyString(String(v||''))))return res.status(400).json({error:'All required fields must be filled in.'});
+    if(!isEmail(email))return res.status(400).json({error:'Please enter a valid email address.'});
+    if(String(password).length<8)return res.status(400).json({error:'Password must be at least 8 characters.'});
+    const normalizedStudentNumber=String(studentNumber).trim();
+    const normalizedEmail=String(email).trim().toLowerCase();
+    const normalizedFirst=String(firstName).trim(),normalizedMiddle=String(middleName||'').trim(),normalizedLast=String(lastName).trim();
+    await client.query('BEGIN');
+    const emailOwner=(await client.query('SELECT id FROM users WHERE LOWER(BTRIM(email))=$1 FOR UPDATE',[normalizedEmail])).rows[0];
+    if(emailOwner){await client.query('ROLLBACK');return res.status(409).json({error:'This email is already registered.'});}
+    const currentHolder=(await client.query('SELECT id FROM students WHERE student_number=$1 FOR UPDATE',[normalizedStudentNumber])).rows[0];
+    if(!currentHolder){await client.query('ROLLBACK');return res.status(409).json({error:'This Student ID is not currently registered. Use ordinary Student registration instead.'});}
+    const activeClaim=(await client.query(`SELECT id FROM student_id_claims WHERE claimed_student_number=$1 AND status IN ('pending','under_review') FOR UPDATE`,[normalizedStudentNumber])).rows[0];
+    if(activeClaim){await client.query('ROLLBACK');return res.status(409).json({error:'A recovery claim for this Student ID is already under administrator review.'});}
+    const id=crypto.randomUUID(),claimId=crypto.randomUUID(),placeholder=`CLAIM-${id}`;
+    const hash=bcrypt.hashSync(String(password),12);
+    await client.query(`INSERT INTO users(id,role,email,password_hash,approval_status,account_verification_status,verification_note) VALUES($1,'student',$2,$3,'approved','under_review',$4)`,[id,normalizedEmail,hash,`Claiming official Student ID ${normalizedStudentNumber}; administrator verification required.`]);
+    await client.query(`INSERT INTO students(id,student_number,first_name,middle_name,last_name,year_level,room_number) VALUES($1,$2,$3,$4,$5,$6,$7)`,[id,placeholder,normalizedFirst,normalizedMiddle||null,normalizedLast,String(yearLevel).trim(),String(roomNumber||'').trim()||null]);
+    await client.query(`INSERT INTO student_id_claims(id,claimant_user_id,claimed_student_number,current_holder_user_id,status) VALUES($1,$2,$3,$4,'pending')`,[claimId,id,normalizedStudentNumber,currentHolder.id]);
+    await client.query('COMMIT');
+    await audit(req,{action:'student_id_claim_submitted',recordType:'student_id_claim',recordId:claimId,newValue:{claimantUserId:id,claimedStudentNumber:normalizedStudentNumber,currentHolderUserId:currentHolder.id}});
+    res.status(201).json({message:'Student ID claim submitted. You may sign in to view its verification status, but academic access remains restricted.',claimId,verificationStatus:'under_review'});
+  }catch(e){try{await client.query('ROLLBACK');}catch{}if(e&&e.code==='23505')return res.status(409).json({error:'This email or Student ID claim is already registered.'});next(e);}finally{client.release();}
 });
 
 // ---------- TEACHER REGISTRATION (requires admin approval) ----------
@@ -101,7 +163,8 @@ router.post('/register/teacher', async (req, res, next) => {
     if (!isEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
     if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
-    const dupEmail = await pool.query(`SELECT id FROM users WHERE email = $1`, [email]);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const dupEmail = await pool.query(`SELECT id FROM users WHERE LOWER(BTRIM(email)) = $1`, [normalizedEmail]);
     if (dupEmail.rows[0]) return res.status(409).json({ error: 'This email is already registered.' });
 
     const id = crypto.randomUUID();
@@ -112,7 +175,7 @@ router.post('/register/teacher', async (req, res, next) => {
       await client.query('BEGIN');
       await client.query(
         `INSERT INTO users (id, role, email, password_hash, approval_status) VALUES ($1, 'teacher', $2, $3, 'pending')`,
-        [id, email, hash]
+        [id, normalizedEmail, hash]
       );
       await client.query(
         `INSERT INTO teachers (id, first_name, last_name, department) VALUES ($1, $2, $3, $4)`,
@@ -126,7 +189,7 @@ router.post('/register/teacher', async (req, res, next) => {
       client.release();
     }
 
-    await audit(req, { action: 'teacher_registration', recordType: 'teacher', recordId: id, newValue: { email } });
+    await audit(req, { action: 'teacher_registration', recordType: 'teacher', recordId: id, newValue: { email: normalizedEmail } });
     res.status(201).json({ message: 'Registration submitted. An administrator must approve your account before you can log in.' });
   } catch (e) {
     if (e && e.code === '23505') return res.status(409).json({ error:'This email is already registered.' });
@@ -136,22 +199,38 @@ router.post('/register/teacher', async (req, res, next) => {
 
 // ---------- STUDENT PROFILE UPDATE ----------
 router.put('/profile/student', authenticate, requireStudentRole, async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const { firstName, middleName, lastName, yearLevel, roomNumber } = req.body || {};
     if (![firstName, lastName, yearLevel].every(v => isNonEmptyString(String(v || '')))) {
       return res.status(400).json({ error: 'First name, last name, and year level are required.' });
     }
-    const existing = (await pool.query('SELECT * FROM students WHERE id = $1', [req.user.id])).rows[0];
-    if (!existing) return res.status(404).json({ error: 'Student profile not found.' });
-    const updated = (await pool.query(
+    const normalizedFirst=String(firstName).trim(),normalizedMiddle=String(middleName||'').trim(),normalizedLast=String(lastName).trim();
+    await client.query('BEGIN');
+    const existing = (await client.query('SELECT * FROM students WHERE id = $1 FOR UPDATE', [req.user.id])).rows[0];
+    if (!existing) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Student profile not found.' }); }
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[[normalizedFirst,normalizedMiddle,normalizedLast].join('|').toLowerCase()]);
+    const duplicateName=(await client.query(`SELECT id FROM students WHERE id<>$1 AND LOWER(BTRIM(first_name))=LOWER($2) AND LOWER(BTRIM(COALESCE(middle_name,'')))=LOWER($3) AND LOWER(BTRIM(last_name))=LOWER($4) LIMIT 1`,[req.user.id,normalizedFirst,normalizedMiddle,normalizedLast])).rows[0]||null;
+    const updated = (await client.query(
       `UPDATE students SET first_name=$1,middle_name=$2,last_name=$3,year_level=$4,room_number=$5 WHERE id=$6 RETURNING *`,
-      [String(firstName).trim(), String(middleName || '').trim() || null, String(lastName).trim(), String(yearLevel).trim(), String(roomNumber || '').trim() || null, req.user.id]
+      [normalizedFirst, normalizedMiddle || null, normalizedLast, String(yearLevel).trim(), String(roomNumber || '').trim() || null, req.user.id]
     )).rows[0];
+    if(duplicateName){
+      await client.query(`UPDATE users SET account_verification_status='possible_duplicate',verification_note='Exact full-name match requires administrator review.',updated_at=now() WHERE id=$1`,[req.user.id]);
+      await client.query(`INSERT INTO student_duplicate_reviews(id,candidate_user_id,matched_user_id,status,match_reason) VALUES($1,$2,$3,'pending','profile_update_exact_full_name') ON CONFLICT DO NOTHING`,[crypto.randomUUID(),req.user.id,duplicateName.id]);
+    }
+    await client.query('COMMIT');
     await audit(req, { action:'student_profile_updated', recordType:'student', recordId:req.user.id,
       previousValue:{first_name:existing.first_name,middle_name:existing.middle_name,last_name:existing.last_name,year_level:existing.year_level,room_number:existing.room_number},
       newValue:{first_name:updated.first_name,middle_name:updated.middle_name,last_name:updated.last_name,year_level:updated.year_level,room_number:updated.room_number} });
-    res.json({ message:'Profile updated successfully.', profile:updated });
-  } catch (e) { next(e); }
+    const nextVerificationStatus=duplicateName?'possible_duplicate':(req.user.accountVerificationStatus||'verified');
+    res.json({
+      message:nextVerificationStatus!=='verified'?'Profile updated. Academic access remains restricted until the account review is completed.':'Profile updated successfully.',
+      profile:updated,
+      accountVerificationStatus:nextVerificationStatus,
+      verificationNote:duplicateName?'Exact full-name match requires administrator review.':(req.user.verificationNote||null)
+    });
+  } catch (e) { try{await client.query('ROLLBACK');}catch{} next(e); } finally { client.release(); }
 });
 
 // ---------- ADMIN-ASSISTED PASSWORD RESET ----------
@@ -246,13 +325,23 @@ router.post('/login', async (req, res, next) => {
     if (!user.is_active) return res.status(403).json({ error: 'This account has been deactivated. Contact an administrator.' });
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
+    if (user.account_verification_status === 'rejected') return res.status(403).json({ error: 'This account did not pass identity verification. Contact an administrator.' });
     await pool.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
     let profile = null;
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
     if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
+    const pendingClaim=user.role==='student'?(await pool.query(`SELECT id,claimed_student_number,status FROM student_id_claims WHERE claimant_user_id=$1 AND status IN ('pending','under_review') ORDER BY created_at DESC LIMIT 1`,[user.id])).rows[0]||null:null;
     const token = signToken(user);
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
-    res.json({ token, user: { id: user.id, role: user.role, email: user.email, profile } });
+    res.json({ token, user: {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+      profile,
+      accountVerificationStatus: user.account_verification_status || 'verified',
+      verificationNote: user.verification_note || null,
+      studentIdClaim: pendingClaim
+    } });
   } catch (e) {
     console.error('=== LOGIN FAILURE ===');
     console.error('Message:', e && e.message ? e.message : e);
@@ -273,7 +362,8 @@ router.get('/me', authenticate, async (req, res, next) => {
     let profile = null;
     if (req.user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [req.user.id])).rows[0];
     if (req.user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [req.user.id])).rows[0];
-    res.json({ user: req.user, profile });
+    const studentIdClaim=req.user.role==='student'?(await pool.query(`SELECT id,claimed_student_number,status FROM student_id_claims WHERE claimant_user_id=$1 AND status IN ('pending','under_review') ORDER BY created_at DESC LIMIT 1`,[req.user.id])).rows[0]||null:null;
+    res.json({ user: req.user, profile, studentIdClaim });
   } catch (e) { next(e); }
 });
 

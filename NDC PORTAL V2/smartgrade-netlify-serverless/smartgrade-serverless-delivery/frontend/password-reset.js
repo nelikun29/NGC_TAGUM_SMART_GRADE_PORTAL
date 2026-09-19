@@ -16,21 +16,6 @@
       m.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(!confirm('Dismiss this password reset request?'))return;try{await api('POST','/auth/password-reset-requests/'+b.dataset.dismiss+'/dismiss');m.remove();openQueue();}catch{};});
     }catch{}
   }
-  function installAdmin(){
-    if(typeof Admin==='undefined'||typeof Admin.renderUsers!=='function'||Admin.__passwordResetWrapped)return;
-    Admin.__passwordResetWrapped=true;const original=Admin.renderUsers.bind(Admin);
-    Admin.renderUsers=async function(){await original();installAdminButton();};
-    function installAdminButton(){
-      if(typeof Admin==='undefined'||Admin.tab!=='users')return;
-      const box=document.getElementById('admin-tab-content');if(!box||box.querySelector('[data-password-reset-queue]'))return;
-      const firstCard=box.querySelector('.glass-card');
-      const panel=document.createElement('div');panel.dataset.passwordResetQueue='1';
-      panel.className='mb-5 glass-card rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
-      panel.innerHTML='<div><h3 class="font-black text-slate-800"><i class="fa-solid fa-key text-blue-600 mr-2"></i>Password Reset Requests</h3><p class="text-xs text-slate-500 mt-1">Review password reset requests submitted by teachers and students.</p></div><button type="button" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap"><i class="fa-solid fa-lock-open mr-1"></i> Review Requests</button>';
-      panel.querySelector('button').onclick=openQueue;
-      if(firstCard)box.insertBefore(panel,firstCard);else box.prepend(panel);
-    }
-    setTimeout(installAdminButton,0);
-  }
-  installForgot();installAdmin();new MutationObserver(()=>installForgot()).observe(document.body,{childList:true,subtree:true});
+  window.SmartGradePasswordReset={openQueue};
+  installForgot();new MutationObserver(()=>installForgot()).observe(document.body,{childList:true,subtree:true});
 })();

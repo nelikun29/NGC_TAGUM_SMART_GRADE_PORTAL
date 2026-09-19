@@ -880,7 +880,9 @@ const Auth = {
 
       Views.renderForRole();
 
-      if (data.user.role === 'student') setTimeout(() => AttendanceQr.submitPending(), 250);
+      if (data.user.role === 'student' && data.user.accountVerificationStatus === 'verified') {
+        setTimeout(() => AttendanceQr.submitPending(), 250);
+      }
 
 
       // Immediately refresh notifications.
@@ -1236,6 +1238,37 @@ const Views = {
 
     }
 
+    if (
+      user.role === 'student' &&
+      user.accountVerificationStatus &&
+      user.accountVerificationStatus !== 'verified'
+    ) {
+      const el = document.getElementById('student-section');
+      if (el) {
+        el.classList.remove('hidden');
+        el.innerHTML = `
+          <div class="mx-auto max-w-2xl glass-card rounded-3xl p-7 text-center">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+              <i class="fa-solid fa-user-shield text-2xl"></i>
+            </div>
+            <h2 class="mt-4 text-2xl font-black text-slate-900">Account Verification Pending</h2>
+            <p class="mt-3 text-sm leading-6 text-slate-600">
+              Another learner record has the same full name. Your registration was not deleted or rejected,
+              but academic access is temporarily restricted while an administrator verifies the accounts.
+            </p>
+            <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900">
+              <p><b>Status:</b> ${esc(String(user.accountVerificationStatus).replaceAll('_',' '))}</p>
+              <p class="mt-1"><b>${user.studentIdClaim ? 'Claimed Student ID' : 'Student ID'}:</b> ${esc(user.studentIdClaim?.claimed_student_number || user.profile?.student_number || '—')}</p>
+              <p class="mt-1"><b>Email:</b> ${esc(user.email || '—')}</p>
+              ${user.verificationNote ? `<p class="mt-1"><b>Note:</b> ${esc(user.verificationNote)}</p>` : ''}
+            </div>
+            <p class="mt-4 text-xs text-slate-500">You may sign out normally. Enrollment, attendance, assessments, and grades remain protected until verification is completed.</p>
+          </div>`;
+      }
+      ApprovalManager.updateBadge(0);
+      return;
+    }
+
 
     if (
       user.role === 'student'
@@ -1318,7 +1351,22 @@ const Views = {
 
 document.addEventListener(
   'DOMContentLoaded',
-  () => {
+  async () => {
+
+    if (Store.token && Store.user) {
+      try {
+        const session = await api('GET', '/auth/me');
+        Store.user = {
+          ...Store.user,
+          ...session.user,
+          profile: session.profile || Store.user.profile || null,
+          studentIdClaim: session.studentIdClaim || null
+        };
+      } catch {
+        // Preserve the cached shell during a temporary connection failure;
+        // protected APIs still enforce the live verification status.
+      }
+    }
 
     Views.renderForRole();
 
@@ -1618,10 +1666,15 @@ const Student = {
       // Store.user is a localStorage-backed getter. Mutating the returned
       // object does not persist it, so write the complete user object back.
       const currentUser = Store.user || {};
-      Store.user = { ...currentUser, profile: data.profile };
+      Store.user = {
+        ...currentUser,
+        profile: data.profile,
+        accountVerificationStatus: data.accountVerificationStatus || currentUser.accountVerificationStatus || 'verified',
+        verificationNote: data.verificationNote || null
+      };
       Student.closeEditProfile();
       Toast.show('Profile Updated', data.message || 'Your profile was updated successfully.', 'success');
-      await Student.render();
+      Views.renderForRole();
     } catch {}
     return false;
   },

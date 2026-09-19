@@ -14,11 +14,18 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   approval_status TEXT NOT NULL DEFAULT 'approved' CHECK(approval_status IN ('pending','approved','rejected')),
+  account_verification_status TEXT NOT NULL DEFAULT 'verified'
+    CHECK(account_verification_status IN ('verified','possible_duplicate','under_review','rejected')),
+  verification_note TEXT,
   failed_login_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_lower
+  ON users(LOWER(BTRIM(email)))
+  WHERE email IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS students (
   id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -36,6 +43,45 @@ CREATE TABLE IF NOT EXISTS teachers (
   last_name TEXT NOT NULL,
   department TEXT
 );
+
+CREATE TABLE IF NOT EXISTS student_duplicate_reviews (
+  id TEXT PRIMARY KEY,
+  candidate_user_id TEXT NOT NULL REFERENCES students(id),
+  matched_user_id TEXT NOT NULL REFERENCES students(id),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending','under_review','confirmed_distinct','rejected','student_id_recovered','records_consolidated')),
+  match_reason TEXT NOT NULL DEFAULT 'exact_full_name',
+  admin_note TEXT,
+  resolved_by TEXT REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at TIMESTAMPTZ,
+  CHECK(candidate_user_id <> matched_user_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_student_duplicate_review_pair
+  ON student_duplicate_reviews(
+    LEAST(candidate_user_id, matched_user_id),
+    GREATEST(candidate_user_id, matched_user_id)
+  )
+  WHERE status IN ('pending','under_review');
+
+CREATE TABLE IF NOT EXISTS student_id_claims (
+  id TEXT PRIMARY KEY,
+  claimant_user_id TEXT NOT NULL UNIQUE REFERENCES students(id),
+  claimed_student_number TEXT NOT NULL,
+  current_holder_user_id TEXT NOT NULL REFERENCES students(id),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending','under_review','approved','rejected')),
+  admin_note TEXT,
+  resolved_by TEXT REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at TIMESTAMPTZ,
+  CHECK(claimant_user_id <> current_holder_user_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_student_id_claim_active_number
+  ON student_id_claims(claimed_student_number)
+  WHERE status IN ('pending','under_review');
 
 -- ===================== ACADEMIC STRUCTURE =====================
 
@@ -227,4 +273,3 @@ CREATE TABLE IF NOT EXISTS grade_adjustments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(student_id, class_id, component)
 );
-

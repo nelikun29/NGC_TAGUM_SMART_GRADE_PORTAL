@@ -46,17 +46,7 @@
   }
 
   if (typeof Admin !== 'undefined') {
-    let users=[];
     Admin.unfinalizeTeacherId='';
-    // admin-role-correction.js loads before this enhancement. Preserve its
-    // working role-correction handler before this file replaces renderUsers.
-    const roleCorrectionHandler = typeof Admin.correctRole === 'function'
-      ? Admin.correctRole.bind(Admin)
-      : null;
-    Admin.correctRole = function(userId){
-      if(roleCorrectionHandler)return roleCorrectionHandler(userId);
-      Toast.show('Role Correction Unavailable','Reload the page and try again.','error');
-    };
     const originalRender=Admin.render?.bind(Admin);
     const originalSwitch=Admin.switchTab?.bind(Admin);
 
@@ -84,48 +74,6 @@
     Admin.openTeacherUnfinalize=function(teacherId){
       Admin.unfinalizeTeacherId=teacherId||'';
       Admin.switchTab('unfinalize');
-    };
-
-    Admin.renderUsers=async function(){
-      const box=document.getElementById('admin-tab-content');if(!box)return;
-      box.innerHTML='<div class="p-6 text-sm font-bold text-slate-500">Loading Teacher and Student accounts…</div>';
-      try{users=await api('GET','/admin/users');}catch{users=[];}
-      const sortByFamilyName=(a,b,role)=>{
-        const aLast=String(role==='teacher'?a.t_last||'':role==='student'?a.s_last||'':'Administrator');
-        const bLast=String(role==='teacher'?b.t_last||'':role==='student'?b.s_last||'':'Administrator');
-        const byLast=aLast.localeCompare(bLast,undefined,{sensitivity:'base'});
-        if(byLast)return byLast;
-        const aFirst=String(role==='teacher'?a.t_first||'':role==='student'?a.s_first||'':'');
-        const bFirst=String(role==='teacher'?b.t_first||'':role==='student'?b.s_first||'':'');
-        return aFirst.localeCompare(bFirst,undefined,{sensitivity:'base'});
-      };
-      const teachers=users.filter(u=>u.role==='teacher').sort((a,b)=>sortByFamilyName(a,b,'teacher'));
-      const students=users.filter(u=>u.role==='student').sort((a,b)=>sortByFamilyName(a,b,'student'));
-      const admins=users.filter(u=>u.role==='admin');
-      const displayName=(u,role)=>{
-        if(role==='teacher')return `${u.t_last||''}, ${u.t_first||''}`.replace(/^,\s*|,\s*$/g,'').trim().toUpperCase();
-        if(role==='student')return `${u.s_last||''}, ${u.s_first||''} ${u.s_middle||''}`.replace(/^,\s*|,\s*$/g,'').replace(/\s+/g,' ').trim().toUpperCase();
-        return 'ADMINISTRATOR';
-      };
-      const actions=u=>`<div class="flex flex-wrap gap-2">${u.role==='teacher'?`<button onclick="Admin.openTeacherUnfinalize('${e(u.id)}')" class="rounded-lg bg-amber-50 px-2.5 py-1.5 font-bold text-amber-800 hover:bg-amber-100"><i class="fa-solid fa-lock-open mr-1"></i>Unfinalized</button>`:''}${u.role!=='admin'?`<button onclick="Admin.correctRole('${e(u.id)}')" class="rounded-lg bg-blue-50 px-2.5 py-1.5 font-bold text-blue-700 hover:bg-blue-100"><i class="fa-solid fa-user-pen mr-1"></i>Correct Role</button>`:''}<button onclick="Admin.resetPassword('${e(u.id)}')" class="rounded-lg bg-violet-50 px-2.5 py-1.5 font-bold text-violet-700 hover:bg-violet-100"><i class="fa-solid fa-key mr-1"></i>Reset Password</button><button onclick="Admin.${u.is_active?'deactivate':'reactivate'}('${e(u.id)}')" class="rounded-lg px-2.5 py-1.5 font-bold ${u.is_active?'bg-red-50 text-red-600':'bg-emerald-50 text-emerald-700'}">${u.is_active?'Deactivate':'Reactivate'}</button></div>`;
-      const table=(title,icon,rows,role)=>{
-        const showId=role==='student';
-        return `<section class="glass-card rounded-2xl overflow-hidden" data-account-panel="${role}"><div class="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h3 class="font-black text-slate-900"><i class="fa-solid ${icon} mr-2 text-blue-700"></i>${title}</h3><p class="mt-1 text-xs text-slate-500"><span data-visible-count>${rows.length}</span> account${rows.length===1?'':'s'}</p></div></div><div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr><th class="text-left p-3">Name</th>${showId?'<th class="text-left p-3">ID No.</th>':''}<th class="text-left p-3">Email</th><th class="text-left p-3">Status</th><th class="text-left p-3">Actions</th></tr></thead><tbody>${rows.length?rows.map(u=>{const name=displayName(u,role);const search=[name,u.student_number||'',u.email||''].join(' ').toLowerCase();return `<tr class="border-t border-slate-100" data-account-row data-search="${e(search)}"><td class="p-3 font-bold">${e(name||'—')}</td>${showId?`<td class="p-3 font-semibold text-slate-600">${e(u.student_number||'—')}</td>`:''}<td class="p-3">${e(u.email)}</td><td class="p-3"><span class="font-bold ${u.is_active?'text-emerald-600':'text-red-600'}">${u.is_active?'Active':'Deactivated'}</span> · ${e(u.approval_status)}</td><td class="p-3">${actions(u)}</td></tr>`;}).join(''):`<tr><td colspan="${showId?5:4}" class="p-5 text-center text-slate-400">No accounts in this panel.</td></tr>`}</tbody></table></div></section>`;
-      };
-      box.innerHTML=`<div class="mb-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4"><div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h3 class="font-black text-slate-900">Account Management</h3><p class="mt-1 text-xs text-slate-600">Names are arranged alphabetically by family name. Search Teacher and Student accounts by name, Student ID, or email.</p></div><div class="w-full lg:max-w-md"><label for="admin-account-search" class="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">Search accounts</label><div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i><input id="admin-account-search" type="search" autocomplete="off" placeholder="Search name, ID No., or email" class="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-500"></div></div></div></div><div class="space-y-5">${table('Teacher Panel','fa-chalkboard-user',teachers,'teacher')}${table('Student Panel','fa-user-graduate',students,'student')}${admins.length?table('Administrator','fa-user-shield',admins,'admin'):''}</div>`;
-      const search=document.getElementById('admin-account-search');
-      if(search)search.addEventListener('input',()=>{
-        const q=search.value.trim().toLowerCase();
-        box.querySelectorAll('[data-account-panel]').forEach(panel=>{
-          let visible=0;
-          panel.querySelectorAll('[data-account-row]').forEach(row=>{
-            const match=!q||String(row.dataset.search||'').includes(q);
-            row.classList.toggle('hidden',!match);
-            if(match)visible++;
-          });
-          const count=panel.querySelector('[data-visible-count]');if(count)count.textContent=String(visible);
-        });
-      });
     };
 
     Admin.renderUnfinalizeRequests=async function(){
