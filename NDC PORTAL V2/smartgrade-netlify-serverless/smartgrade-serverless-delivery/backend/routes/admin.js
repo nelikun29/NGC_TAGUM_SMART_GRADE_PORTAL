@@ -24,6 +24,97 @@ router.get('/users', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get('/users/:userId/diagnostics', async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const user = (await pool.query(
+      `SELECT id,role,email,is_active,approval_status,failed_login_attempts,locked_until,created_at,updated_at
+       FROM users WHERE id=$1`,
+      [userId]
+    )).rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const profileTable = user.role === 'student' ? 'students' : user.role === 'teacher' ? 'teachers' : null;
+    let profileExists = true;
+    if (profileTable) {
+      profileExists = !!(await pool.query(`SELECT id FROM ${profileTable} WHERE id=$1`, [userId])).rows[0];
+    }
+
+    let enrollment = null;
+    if (user.role === 'student') {
+      enrollment = (await pool.query(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE status='active')::int AS active,
+           COUNT(*) FILTER (WHERE status='pending')::int AS pending,
+           COUNT(*) FILTER (WHERE status='dropped')::int AS dropped,
+           COUNT(*) FILTER (WHERE status='rejected')::int AS rejected
+         FROM enrollments WHERE student_id=$1`,
+        [userId]
+      )).rows[0];
+    }
+
+    const now = new Date();
+    const locked = !!(user.locked_until && new Date(user.locked_until) > now);
+    const checks = {
+      accountExists: true,
+      active: !!user.is_active,
+      approved: user.approval_status === 'approved',
+      profileLinked: profileExists,
+      locked
+    };
+    const canAuthenticate = checks.active && checks.approved && checks.profileLinked && !checks.locked;
+
+    res.json({
+      user: {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        isActive: user.is_active,
+        approvalStatus: user.approval_status,
+        failedLoginAttempts: Number(user.failed_login_attempts || 0),
+        lockedUntil: user.locked_until,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      },
+      checks,
+      enrollment,
+      canAuthenticate,
+      diagnosis: locked
+        ? 'Account is temporarily locked after repeated failed login attempts.'
+        : !user.is_active
+          ? 'Account is deactivated.'
+          : user.approval_status !== 'approved'
+            ? `Account approval status is ${user.approval_status}.`
+            : !profileExists
+              ? `${user.role} profile record is missing or not linked to this user.`
+              : 'No account-state blocker was found. If login still fails, inspect the login request/server log and browser session.'
+    });
+  } catch (e) { next(e); }
+});
+
+router.post('/users/:userId/unlock', async (req, res, next) => {
+  try {
+    const user = (await pool.query(
+      'SELECT id,failed_login_attempts,locked_until FROM users WHERE id=$1',
+      [req.params.userId]
+    )).rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    await pool.query(
+      'UPDATE users SET failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$1',
+      [user.id]
+    );
+    await audit(req, {
+      action: 'account_unlock',
+      recordType: 'user',
+      recordId: user.id,
+      previousValue: { failedLoginAttempts: user.failed_login_attempts, lockedUntil: user.locked_until },
+      newValue: { failedLoginAttempts: 0, lockedUntil: null }
+    });
+    res.json({ message: 'Account login lock cleared.' });
+  } catch (e) { next(e); }
+});
+
 router.get('/users/pending', async (req, res, next) => {
   try {
     const { rows } = await pool.query(`SELECT u.id,u.role,u.email,u.created_at,t.first_name,t.last_name,t.department FROM users u LEFT JOIN teachers t ON t.id=u.id WHERE u.approval_status='pending' ORDER BY u.created_at ASC`);
