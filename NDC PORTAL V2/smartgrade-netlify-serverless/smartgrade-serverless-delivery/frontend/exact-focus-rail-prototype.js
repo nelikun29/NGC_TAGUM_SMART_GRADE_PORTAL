@@ -38,11 +38,24 @@
     .exact-teacher-heading h1{margin:0;color:var(--efr-ink)!important;font-size:1.2rem;line-height:1.15;font-weight:900;letter-spacing:-.02em}
     .exact-teacher-heading p{margin:4px 0 0!important;color:#7a899a!important;font-size:.70rem!important;font-weight:600}
 
-    #teacher-section.sg-exact-focus-prototype{
-      display:block!important;max-width:none!important;padding:0!important;margin:0!important;color:var(--efr-ink)!important
+    #teacher-section.sg-focus-rail-active.sg-exact-focus-prototype:not(.hidden){
+      display:block!important;
+      grid-template-columns:none!important;
+      gap:0!important;
+      max-width:none!important;
+      width:100%!important;
+      padding:0!important;
+      margin:0!important;
+      color:var(--efr-ink)!important
     }
-    #teacher-section.sg-exact-focus-prototype > .space-y-6{
-      margin-left:264px!important;padding:18px 30px 34px!important;max-width:none!important;min-width:0
+    #teacher-section.sg-focus-rail-active.sg-exact-focus-prototype:not(.hidden) > .space-y-6{
+      display:block!important;
+      grid-column:auto!important;
+      width:auto!important;
+      min-width:0!important;
+      margin:0 0 0 264px!important;
+      padding:18px 30px 34px!important;
+      max-width:none!important
     }
     #teacher-section.sg-exact-focus-prototype .fr-workspace-masthead,
     #teacher-section.sg-exact-focus-prototype .fr-summary-grid,
@@ -200,7 +213,7 @@
       body:has(#teacher-section:not(.hidden)) .portal-header .max-w-7xl{padding-left:18px!important}
       #sg-focus-rail.exact-focus-rail{left:-264px!important;transition:left .2s ease}
       #sg-focus-rail.exact-focus-rail.mobile-open{left:0!important}
-      #teacher-section.sg-exact-focus-prototype > .space-y-6{margin-left:0!important;padding:16px!important}
+      #teacher-section.sg-focus-rail-active.sg-exact-focus-prototype:not(.hidden) > .space-y-6{margin-left:0!important;padding:16px!important}
       #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div{grid-template-columns:1fr!important}
       #teacher-section.sg-exact-focus-prototype .sg-ref-selected select{min-width:0!important;width:100%!important}
       .exact-summary-strip{grid-template-columns:1fr 1fr}
