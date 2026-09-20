@@ -280,6 +280,7 @@
   function activeKey(){
     if (typeof Teacher === 'undefined') return 'classes';
     const tab = Teacher.state?.tab || 'gradebook';
+    if (['quizzes','performance','exams'].includes(tab)) return 'quizzes';
     return tab;
   }
 
