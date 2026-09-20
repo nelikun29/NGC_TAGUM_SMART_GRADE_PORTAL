@@ -260,14 +260,6 @@
     .fr-kicker{font-size:.61rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#7a8ba6}
     .fr-workspace-title{margin-top:5px;font-size:1.48rem;line-height:1.15;font-weight:900;letter-spacing:-.028em;color:var(--fr-navy)}
     .fr-workspace-subtitle{margin-top:6px;max-width:680px;font-size:.76rem;line-height:1.55;color:var(--fr-muted)}
-    .fr-masthead-actions{position:relative;z-index:2;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .fr-action-primary,.fr-action-secondary{
-      display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:39px;
-      padding:9px 12px;border-radius:10px;font-size:.70rem;font-weight:850!important;white-space:nowrap;
-      transform:none!important;filter:none!important
-    }
-    .fr-action-primary{background:var(--fr-navy)!important;color:#fff!important;box-shadow:0 7px 18px rgba(11,36,87,.16)}
-    .fr-action-secondary{background:#fff!important;color:var(--fr-navy)!important;border:1px solid var(--fr-line)!important}
     .fr-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     .fr-summary-card{
       position:relative;overflow:hidden;min-height:90px;padding:15px 16px;
@@ -475,7 +467,6 @@
     }
     @media(max-width:760px){
       .fr-workspace-masthead{padding:18px;flex-direction:column}
-      .fr-masthead-actions{width:100%;justify-content:flex-start}
       .fr-summary-grid{grid-template-columns:1fr 1fr;gap:9px}
     }
     @media(max-width:640px){
@@ -629,10 +620,7 @@
             ${classMeta.map(x=>'<span class="fr-context-chip">'+esc(x)+'</span>').join('')}
           </div>
         </div>
-        <div class="fr-masthead-actions">
-          <button type="button" class="fr-action-secondary" onclick="Teacher.switchTab('gradebook')"><i class="fa-solid fa-table-list"></i> Gradebook</button>
-          <button type="button" class="fr-action-primary" onclick="Teacher.showCreateClass()"><i class="fa-solid fa-plus"></i> New Class</button>
-        </div>`;
+  `;
     }
   }
 
