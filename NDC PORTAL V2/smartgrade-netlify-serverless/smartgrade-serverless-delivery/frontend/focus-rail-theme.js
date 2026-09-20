@@ -603,20 +603,31 @@
       ? [selected.year_level,selected.section,selected.room_number?('Room '+selected.room_number):null].filter(Boolean)
       : [];
 
-    host.innerHTML=`
-      <div class="relative z-[2] min-w-0">
-        <div class="fr-kicker">Teacher Workspace</div>
-        <h2 class="fr-workspace-title">Welcome, ${esc(teacherName)}</h2>
-        <p class="fr-workspace-subtitle">Manage classes, learners, attendance, assessments and grades from one focused academic workspace.</p>
-        <div class="fr-context-line">
-          <span class="fr-context-chip"><i class="fa-solid fa-book-open"></i> ${esc(selected?.subject||'No class selected')}</span>
-          ${classMeta.map(x=>'<span class="fr-context-chip">'+esc(x)+'</span>').join('')}
+    const signature=JSON.stringify({
+      teacherName,
+      classId:selected?.id||null,
+      subject:selected?.subject||'',
+      year:selected?.year_level||'',
+      section:selected?.section||'',
+      room:selected?.room_number||''
+    });
+    if(host.dataset.frSignature!==signature){
+      host.dataset.frSignature=signature;
+      host.innerHTML=`
+        <div class="relative z-[2] min-w-0">
+          <div class="fr-kicker">Teacher Workspace</div>
+          <h2 class="fr-workspace-title">Welcome, ${esc(teacherName)}</h2>
+          <p class="fr-workspace-subtitle">Manage classes, learners, attendance, assessments and grades from one focused academic workspace.</p>
+          <div class="fr-context-line">
+            <span class="fr-context-chip"><i class="fa-solid fa-book-open"></i> ${esc(selected?.subject||'No class selected')}</span>
+            ${classMeta.map(x=>'<span class="fr-context-chip">'+esc(x)+'</span>').join('')}
+          </div>
         </div>
-      </div>
-      <div class="fr-masthead-actions">
-        <button type="button" class="fr-action-secondary" onclick="Teacher.switchTab('gradebook')"><i class="fa-solid fa-table-list"></i> Gradebook</button>
-        <button type="button" class="fr-action-primary" onclick="Teacher.showCreateClass()"><i class="fa-solid fa-plus"></i> New Class</button>
-      </div>`;
+        <div class="fr-masthead-actions">
+          <button type="button" class="fr-action-secondary" onclick="Teacher.switchTab('gradebook')"><i class="fa-solid fa-table-list"></i> Gradebook</button>
+          <button type="button" class="fr-action-primary" onclick="Teacher.showCreateClass()"><i class="fa-solid fa-plus"></i> New Class</button>
+        </div>`;
+    }
   }
 
   function ensureSummary(section){
@@ -630,11 +641,18 @@
       if(mast) mast.after(grid); else root.prepend(grid);
     }
     const s=classStats();
-    grid.innerHTML=`
-      <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-layer-group"></i></div><div class="fr-summary-label">Classes</div><div class="fr-summary-value">${s.classes}</div><div class="fr-summary-note">Managed classes</div></div>
-      <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-users"></i></div><div class="fr-summary-label">Students</div><div class="fr-summary-value">${s.students}</div><div class="fr-summary-note">Across active classes</div></div>
-      <div class="fr-summary-card fr-summary-gold"><div class="fr-stat-icon"><i class="fa-solid fa-user-clock"></i></div><div class="fr-summary-label">Pending</div><div class="fr-summary-value">${s.pending}</div><div class="fr-summary-note">Enrollment approvals</div></div>
-      <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-book-open-reader"></i></div><div class="fr-summary-label">Current Class</div><div class="fr-summary-value text-[.94rem]">${esc(s.selected?.subject||'—')}</div><div class="fr-summary-note">${esc(s.selected?.section||'Select a class')}</div></div>`;
+    const signature=JSON.stringify({
+      classes:s.classes,students:s.students,pending:s.pending,
+      classId:s.selected?.id||null,subject:s.selected?.subject||'',section:s.selected?.section||''
+    });
+    if(grid.dataset.frSignature!==signature){
+      grid.dataset.frSignature=signature;
+      grid.innerHTML=`
+        <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-layer-group"></i></div><div class="fr-summary-label">Classes</div><div class="fr-summary-value">${s.classes}</div><div class="fr-summary-note">Managed classes</div></div>
+        <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-users"></i></div><div class="fr-summary-label">Students</div><div class="fr-summary-value">${s.students}</div><div class="fr-summary-note">Across active classes</div></div>
+        <div class="fr-summary-card fr-summary-gold"><div class="fr-stat-icon"><i class="fa-solid fa-user-clock"></i></div><div class="fr-summary-label">Pending</div><div class="fr-summary-value">${s.pending}</div><div class="fr-summary-note">Enrollment approvals</div></div>
+        <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-book-open-reader"></i></div><div class="fr-summary-label">Current Class</div><div class="fr-summary-value text-[.94rem]">${esc(s.selected?.subject||'—')}</div><div class="fr-summary-note">${esc(s.selected?.section||'Select a class')}</div></div>`;
+    }
   }
 
   function syncRailBadges(){
@@ -643,8 +661,10 @@
     Object.entries(values).forEach(([key,value])=>{
       document.querySelectorAll('[data-fr-badge="'+key+'"]').forEach(el=>{
         const n=Number(value||0);
-        el.textContent=n>99?'99+':String(n);
-        el.style.display=n>0?'inline-flex':'none';
+        const next=n>99?'99+':String(n);
+        if(el.textContent!==next) el.textContent=next;
+        const display=n>0?'inline-flex':'none';
+        if(el.style.display!==display) el.style.display=display;
       });
     });
   }
@@ -820,7 +840,10 @@
     decorateTeacherModals();
     syncRailBadges();
     const current=document.getElementById('fr-current-class');
-    if(current) current.textContent=selectedClassName();
+    if(current){
+      const next=selectedClassName();
+      if(current.textContent!==next) current.textContent=next;
+    }
     syncActive();
   }
 
@@ -848,6 +871,8 @@
     }
   });
 
+  // Watch only structural DOM changes. Attribute/text mutations are intentionally
+  // excluded so Focus Rail's own decoration cannot create an observer feedback loop.
   new MutationObserver(queueDecorate).observe(document.body,{childList:true,subtree:true});
 
   const wait=setInterval(()=>{
