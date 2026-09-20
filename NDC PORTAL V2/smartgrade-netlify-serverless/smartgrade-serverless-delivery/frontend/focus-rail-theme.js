@@ -212,6 +212,10 @@
       border-bottom:1px solid var(--fr-line)!important;
       padding:.78rem .72rem!important;
     }
+    #teacher-grade-table thead th:first-child{
+      color:var(--fr-navy)!important;
+      font-weight:900!important;
+    }
     #teacher-grade-table tbody td{
       padding:.80rem .72rem!important;border-bottom:1px solid #edf1f6!important;
       font-size:.76rem!important;color:#334155!important;vertical-align:middle
