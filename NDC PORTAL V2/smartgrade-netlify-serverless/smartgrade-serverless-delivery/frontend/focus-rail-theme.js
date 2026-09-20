@@ -465,25 +465,24 @@
     /* =========================================================
        STUDENT DASHBOARD — CLASS CARD GRID
        ========================================================= */
-    #student-section .lg\:col-span-2.space-y-4{
+    #student-section .student-class-card-grid{
       display:grid!important;
       grid-template-columns:repeat(2,minmax(0,1fr))!important;
       gap:18px!important;
       align-items:start!important;
+      width:100%!important;
     }
-    #student-section .lg\:col-span-2.space-y-4 > h3{
-      grid-column:1 / -1!important;
-      margin-bottom:0!important;
-    }
-    #student-section .lg\:col-span-2.space-y-4 > .glass-card{
+    #student-section .student-class-card-grid > .glass-card{
       margin:0!important;
+      width:100%!important;
       height:100%!important;
+      min-width:0!important;
     }
-    #student-section .lg\:col-span-2.space-y-4 > p{
+    #student-section .student-class-card-grid > p{
       grid-column:1 / -1!important;
     }
     @media(max-width:1100px){
-      #student-section .lg\:col-span-2.space-y-4{
+      #student-section .student-class-card-grid{
         grid-template-columns:1fr!important;
       }
     }
