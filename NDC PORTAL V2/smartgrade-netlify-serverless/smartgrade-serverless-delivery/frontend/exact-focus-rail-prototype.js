@@ -1,0 +1,398 @@
+// Exact Focus Rail port — based on the uploaded NGC Focus Rail prototype.
+// Presentation/UX only. Existing auth, API, grading, attendance, approval,
+// assessment, account-integrity and database logic remain authoritative.
+(() => {
+  const param = new URLSearchParams(window.location.search).get('exactFocusRail');
+  if (String(param || '').toLowerCase() === 'off') return;
+
+  const STYLE_ID='sg-exact-focus-rail-style';
+  const RAIL_ID='sg-focus-rail';
+  const ROOT_CLASS='sg-exact-focus-prototype';
+
+  const css=`
+    :root{
+      --efr-navy:#173f6b;
+      --efr-navy-deep:#123761;
+      --efr-blue:#2f67e8;
+      --efr-gold:#f3c52f;
+      --efr-canvas:#f7f9fc;
+      --efr-line:#d8e1eb;
+      --efr-ink:#17324f;
+      --efr-muted:#6d8096;
+      --efr-soft:#eef3f8;
+      --efr-success:#16945f;
+      --efr-warning:#b9790d;
+    }
+
+    body:has(#teacher-section:not(.hidden)){background:var(--efr-canvas)!important}
+    body:has(#teacher-section:not(.hidden)) main{
+      max-width:none!important;padding-left:0!important;padding-right:0!important;padding-top:0!important
+    }
+    body:has(#teacher-section:not(.hidden)) .portal-header{
+      background:#fff!important;color:var(--efr-ink)!important;border-bottom:1px solid var(--efr-line)!important;box-shadow:none!important
+    }
+    body:has(#teacher-section:not(.hidden)) .portal-header .header-glow{display:none!important}
+    body:has(#teacher-section:not(.hidden)) .portal-header .max-w-7xl{
+      max-width:none!important;padding-left:292px!important;padding-right:24px!important
+    }
+    .exact-teacher-heading h1{margin:0;color:var(--efr-ink)!important;font-size:1.2rem;line-height:1.15;font-weight:900;letter-spacing:-.02em}
+    .exact-teacher-heading p{margin:4px 0 0!important;color:#7a899a!important;font-size:.70rem!important;font-weight:600}
+
+    #teacher-section.sg-exact-focus-prototype{
+      display:block!important;max-width:none!important;padding:0!important;margin:0!important;color:var(--efr-ink)!important
+    }
+    #teacher-section.sg-exact-focus-prototype > .space-y-6{
+      margin-left:264px!important;padding:18px 30px 34px!important;max-width:none!important;min-width:0
+    }
+    #teacher-section.sg-exact-focus-prototype .fr-workspace-masthead,
+    #teacher-section.sg-exact-focus-prototype .fr-summary-grid,
+    #teacher-section.sg-exact-focus-prototype [data-exact-hide="true"]{display:none!important}
+
+    #sg-focus-rail.exact-focus-rail{
+      position:fixed!important;left:0!important;top:0!important;bottom:0!important;width:264px!important;min-height:100vh!important;
+      border:0!important;border-radius:0!important;background:linear-gradient(180deg,var(--efr-navy) 0%,var(--efr-navy-deep) 100%)!important;
+      box-shadow:none!important;z-index:48!important;overflow-y:auto!important;color:#fff!important
+    }
+    .exact-brand{display:flex;align-items:center;gap:12px;min-height:112px;padding:18px 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .exact-brand img{width:58px;height:58px;border-radius:50%;object-fit:contain;background:#fff;box-shadow:0 0 0 2px rgba(243,197,47,.85)}
+    .exact-brand strong{display:block;font-size:.70rem;line-height:1.22;color:#f3cf51;letter-spacing:.02em}
+    .exact-brand span{display:block;margin-top:5px;font-size:.64rem;line-height:1.25;color:#fff;font-weight:800}
+    .exact-primary-nav{padding:8px 0 10px}
+    .exact-primary-nav button{
+      width:100%;min-height:52px;display:flex;align-items:center;gap:14px;padding:0 22px;border:0;border-left:5px solid transparent;
+      background:transparent;color:#eef4fb;font-size:.82rem;font-weight:800;text-align:left;border-radius:0!important
+    }
+    .exact-primary-nav button i{width:18px;text-align:center;font-size:.92rem}
+    .exact-primary-nav button:hover{background:rgba(255,255,255,.06)!important}
+    .exact-primary-nav button.active{background:rgba(255,255,255,.10)!important;border-left-color:var(--efr-gold)!important;color:#fff!important}
+    .exact-primary-nav .badge{
+      margin-left:auto;display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:99px;background:#ef4444;color:#fff;font-size:.56rem;font-weight:900
+    }
+    .exact-rail-divider{height:1px;margin:6px 20px 0;background:rgba(255,255,255,.12)}
+    .exact-rail-label{margin:16px 22px 9px!important;color:#9eb0c6!important;font-size:.62rem!important;font-weight:900!important;letter-spacing:.12em!important;text-transform:uppercase}
+    .exact-class-list{display:flex;flex-direction:column}
+    .exact-class-item{
+      position:relative;width:100%;min-height:78px;padding:12px 18px 12px 24px;border:0;border-left:5px solid transparent;
+      background:transparent;color:#fff;text-align:left;border-radius:0!important
+    }
+    .exact-class-item:hover{background:rgba(255,255,255,.055)!important}
+    .exact-class-item.selected{background:rgba(255,255,255,.10)!important;border-left-color:var(--efr-gold)!important}
+    .exact-class-item strong{display:block;max-width:168px;color:#fff;font-size:.73rem;line-height:1.35;font-weight:900}
+    .exact-class-item small{display:block;margin-top:5px;color:#b8c7d8;font-size:.61rem;font-weight:650}
+    .exact-class-item .count{
+      position:absolute;right:14px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
+      background:#e6eef7;color:var(--efr-navy);font-size:.63rem;font-weight:900
+    }
+    .exact-create-class{
+      width:calc(100% - 36px)!important;min-height:44px;margin:18px!important;border:1px solid #5d8bf0!important;border-radius:9px!important;
+      background:var(--efr-blue)!important;color:#fff!important;font-size:.78rem!important;font-weight:900!important
+    }
+    .exact-rail-footer{margin-top:38px;padding:22px;border-top:1px solid rgba(255,255,255,.08);color:#9eb0c6;font-size:.60rem;line-height:1.45}
+    .exact-rail-footer strong{display:block;color:#c8d5e4;font-size:.64rem;margin-bottom:2px}
+
+    .exact-breadcrumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 14px;color:#8795a6;font-size:.66rem;font-weight:600}
+    .exact-breadcrumbs i{font-size:.52rem;color:#a5b1bd}
+
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected{
+      margin:0!important;padding:0 0 14px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important
+    }
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div{
+      display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:24px!important;align-items:center!important
+    }
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div > div:first-child{position:relative;padding-left:18px}
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div > div:first-child::before{
+      content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px;background:var(--efr-blue)
+    }
+    #teacher-section.sg-exact-focus-prototype #teacher-selected-class-name{
+      color:var(--efr-ink)!important;font-size:1.55rem!important;line-height:1.18!important;font-weight:900!important;letter-spacing:-.03em!important
+    }
+    #teacher-section.sg-exact-focus-prototype #teacher-selected-class-meta{
+      color:var(--efr-muted)!important;font-size:.72rem!important;font-weight:700!important;margin-top:6px!important
+    }
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected label{color:#334155!important;font-size:.70rem!important;font-weight:800!important}
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected select{
+      min-width:360px!important;height:44px!important;border:1px solid #cbd5e1!important;border-radius:9px!important;background:#fff!important;
+      color:var(--efr-ink)!important;font-size:.70rem!important;font-weight:800!important
+    }
+
+    #teacher-section.sg-exact-focus-prototype .sg-ref-tabs{
+      display:flex!important;gap:0!important;overflow-x:auto!important;padding:0!important;margin:0!important;background:transparent!important;
+      border:0!important;border-bottom:1px solid var(--efr-line)!important;border-radius:0!important
+    }
+    #teacher-section.sg-exact-focus-prototype .sg-ref-tabs .tab-btn{
+      position:relative!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;
+      min-height:52px!important;padding:0 18px!important;border:0!important;border-radius:0!important;color:#50647b!important;
+      background:transparent!important;font-size:.70rem!important;font-weight:850!important;white-space:nowrap!important
+    }
+    #teacher-section.sg-exact-focus-prototype .sg-ref-tabs .tab-btn.active{color:var(--efr-blue)!important;background:transparent!important}
+    #teacher-section.sg-exact-focus-prototype .sg-ref-tabs .tab-btn.active::after{
+      content:"";position:absolute;left:16%;right:16%;bottom:-1px;height:3px;border-radius:3px;background:var(--efr-blue)!important
+    }
+
+    .exact-summary-strip{
+      display:grid;grid-template-columns:.9fr .9fr 1.25fr .9fr;margin:18px 0;border:1px solid var(--efr-line);border-radius:12px;
+      background:#fff;overflow:hidden;box-shadow:0 8px 22px rgba(23,59,103,.045)
+    }
+    .exact-summary-strip>div{display:flex;align-items:center;gap:12px;min-height:72px;padding:12px 18px;border-right:1px solid var(--efr-line)}
+    .exact-summary-strip>div:last-child{border-right:0}
+    .exact-summary-strip>div>i{width:30px;color:var(--efr-blue);font-size:21px;text-align:center}
+    .exact-summary-strip>div:nth-child(2)>i{color:var(--efr-warning)}
+    .exact-summary-strip .save-dot{width:10px;height:10px;border-radius:50%;background:#17a673}
+    .exact-summary-strip span{display:grid;gap:3px}
+    .exact-summary-strip strong{font-size:.82rem;color:var(--efr-ink)}
+    .exact-summary-strip small{font-size:.59rem;color:var(--efr-muted)}
+
+    #teacher-tab-content{
+      padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important
+    }
+    #teacher-tab-content .space-y-4{gap:0!important}
+    #teacher-tab-content .space-y-4 > div:first-child{
+      display:grid!important;grid-template-columns:minmax(250px,1fr) 230px auto!important;gap:12px!important;align-items:end!important;margin:0 0 18px!important
+    }
+    #teacher-tab-content .space-y-4 > div:first-child > div:first-child{display:none!important}
+    #teacher-grade-filter{
+      grid-column:1!important;width:100%!important;height:46px!important;border:1px solid #cbd5e1!important;border-radius:10px!important;
+      padding:0 14px!important;background:#fff!important;color:var(--efr-ink)!important;font-size:.70rem!important
+    }
+    .exact-filter-wrap{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:9px;color:#334155;font-size:.66rem;font-weight:800}
+    .exact-filter-wrap select{
+      height:46px;padding:0 34px 0 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:var(--efr-ink);font-size:.68rem;font-weight:800
+    }
+    .exact-export-btn{
+      min-height:46px;padding:0 16px;border:1px solid var(--efr-blue);border-radius:9px;background:#fff;color:var(--efr-blue);font-size:.68rem;font-weight:900
+    }
+
+    #teacher-grade-table{
+      min-width:1040px!important;border-collapse:separate!important;border-spacing:0!important;background:#fff!important
+    }
+    #teacher-grade-table thead th{
+      position:sticky!important;top:0!important;z-index:3!important;height:54px!important;padding:8px 11px!important;background:#e9eff6!important;
+      color:var(--efr-ink)!important;font-size:.58rem!important;font-weight:900!important;letter-spacing:.01em!important;text-align:center!important;
+      text-transform:uppercase!important;border-right:1px solid var(--efr-line)!important;border-bottom:1px solid var(--efr-line)!important
+    }
+    #teacher-grade-table thead th:first-child{left:0!important;text-align:left!important;z-index:5!important}
+    #teacher-grade-table tbody td{
+      height:57px!important;padding:8px 11px!important;background:#fff!important;color:#334155!important;font-size:.64rem!important;text-align:center!important;
+      border-right:1px solid var(--efr-line)!important;border-bottom:1px solid var(--efr-line)!important
+    }
+    #teacher-grade-table tbody tr:hover td{background:#f8fbff!important}
+    #teacher-grade-table tbody td:first-child{
+      position:sticky!important;left:0!important;z-index:2!important;min-width:190px!important;background:#fff!important;text-align:left!important;
+      color:var(--efr-ink)!important;font-size:.66rem!important;font-weight:900!important
+    }
+    #teacher-grade-table tbody tr:hover td:first-child{background:#f8fbff!important}
+    #teacher-grade-table td button{font-weight:850!important}
+    #teacher-grade-table span.text-amber-600{
+      display:inline-block!important;padding:6px 9px!important;border-radius:999px!important;background:#fff3dc!important;color:var(--efr-warning)!important
+    }
+    #teacher-grade-table span.text-emerald-600{
+      display:inline-block!important;padding:6px 9px!important;border-radius:999px!important;background:#e5f6ef!important;color:var(--efr-success)!important
+    }
+    .exact-grade-panel{
+      border:1px solid var(--efr-line)!important;border-radius:12px!important;background:#fff!important;overflow:auto!important;
+      box-shadow:0 12px 30px rgba(23,59,103,.055)!important
+    }
+    .exact-grade-title{display:flex;align-items:flex-end;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--efr-line);background:#fff}
+    .exact-grade-title h3{margin:0;color:var(--efr-ink);font-size:1rem;font-weight:900}
+    .exact-grade-title p,.exact-grade-title span{margin:4px 0 0;color:var(--efr-muted);font-size:.58rem}
+
+    @media(max-width:1000px){
+      body:has(#teacher-section:not(.hidden)) .portal-header .max-w-7xl{padding-left:18px!important}
+      #sg-focus-rail.exact-focus-rail{left:-264px!important;transition:left .2s ease}
+      #sg-focus-rail.exact-focus-rail.mobile-open{left:0!important}
+      #teacher-section.sg-exact-focus-prototype > .space-y-6{margin-left:0!important;padding:16px!important}
+      #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div{grid-template-columns:1fr!important}
+      #teacher-section.sg-exact-focus-prototype .sg-ref-selected select{min-width:0!important;width:100%!important}
+      .exact-summary-strip{grid-template-columns:1fr 1fr}
+      .exact-summary-strip>div:nth-child(2){border-right:0}
+      .exact-summary-strip>div:nth-child(-n+2){border-bottom:1px solid var(--efr-line)}
+    }
+    @media(max-width:680px){
+      .exact-summary-strip{grid-template-columns:1fr}
+      .exact-summary-strip>div{border-right:0;border-bottom:1px solid var(--efr-line)}
+      .exact-summary-strip>div:last-child{border-bottom:0}
+      #teacher-tab-content .space-y-4 > div:first-child{grid-template-columns:1fr!important}
+      #teacher-grade-filter{grid-column:auto!important}
+    }
+  `;
+
+  if(!document.getElementById(STYLE_ID)){
+    const style=document.createElement('style');
+    style.id=STYLE_ID;
+    style.textContent=css;
+    document.head.appendChild(style);
+  }
+
+  function teacherVisible(){
+    const s=document.getElementById('teacher-section');
+    return s && !s.classList.contains('hidden');
+  }
+  function selectedClass(){try{return Teacher?.getSelectedClass?.()||null}catch{return null}}
+  function classRows(){try{return Array.isArray(Teacher?._classes)?Teacher._classes:[]}catch{return []}}
+  function logoSrc(){return document.querySelector('.portal-header img')?.getAttribute('src') || './assets/logo.png'}
+
+  function decorateHeader(){
+    const header=document.querySelector('.portal-header');
+    if(!header) return;
+    const brand=header.querySelector('.max-w-7xl > div > div:first-child');
+    if(!brand) return;
+    if(!brand.dataset.exactOriginalHtml) brand.dataset.exactOriginalHtml=brand.innerHTML;
+    if(brand.dataset.exactTeacherHeader==='1') return;
+    brand.dataset.exactTeacherHeader='1';
+    brand.removeAttribute('onclick');
+    brand.innerHTML='<div class="exact-teacher-heading"><h1>Teacher Workspace</h1><p>Teach &nbsp;•&nbsp; Track &nbsp;•&nbsp; Support &nbsp;•&nbsp; Empower</p></div>';
+  }
+
+  function restoreHeader(){
+    const header=document.querySelector('.portal-header');
+    const brand=header?.querySelector('.max-w-7xl > div > div:first-child');
+    if(!brand || !brand.dataset.exactOriginalHtml || brand.dataset.exactTeacherHeader!=='1') return;
+    brand.innerHTML=brand.dataset.exactOriginalHtml;
+    brand.setAttribute('onclick','Views.home()');
+    delete brand.dataset.exactTeacherHeader;
+  }
+
+  function railHtml(){
+    const rows=classRows();
+    const selected=selectedClass();
+    const pending=rows.reduce((n,c)=>n+Number(c.pending_count||0),0);
+    return `
+      <div class="exact-brand">
+        <img src="${logoSrc()}" alt="NDC Tagum Foundation, Inc.">
+        <div><strong>NDC TAGUM<br>FOUNDATION, INC.</strong><span>SMART GRADE &<br>ATTENDANCE PORTAL</span></div>
+      </div>
+      <nav class="exact-primary-nav">
+        <button type="button" data-exact-nav="dashboard"><i class="fa-solid fa-house"></i><span>Dashboard</span></button>
+        <button type="button" data-exact-nav="classes" class="active"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
+        <button type="button" data-exact-nav="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span>${pending?'<b class="badge">'+(pending>99?'99+':pending)+'</b>':''}</button>
+        <button type="button" data-exact-nav="profile"><i class="fa-solid fa-user"></i><span>Profile</span></button>
+      </nav>
+      <div class="exact-rail-divider"></div>
+      <p class="exact-rail-label">My Classes</p>
+      <div class="exact-class-list">
+        ${rows.map(c=>`
+          <button type="button" class="exact-class-item ${String(c.id)===String(selected?.id)?'selected':''}" data-exact-class="${String(c.id).replace(/"/g,'&quot;')}">
+            <strong>${String(c.subject||'Untitled Subject').replace(/</g,'&lt;')}</strong>
+            <small>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}</small>
+            <span class="count">${Number(c.student_count||0)}</span>
+          </button>
+        `).join('')}
+      </div>
+      <button type="button" class="exact-create-class"><i class="fa-solid fa-plus mr-2"></i>Create Class</button>
+      <div class="exact-rail-footer"><strong>NDC Tagum Foundation, Inc.</strong>Smart Grade & Attendance Portal</div>
+    `;
+  }
+
+  function rebuildRail(section){
+    const rail=section.querySelector('#'+RAIL_ID);
+    if(!rail) return;
+    rail.classList.add('exact-focus-rail');
+    const sig=JSON.stringify(classRows().map(c=>[c.id,c.subject,c.year_level,c.section,c.student_count,c.pending_count]).concat([[selectedClass()?.id||null]]));
+    if(rail.dataset.exactSignature===sig) return;
+    rail.dataset.exactSignature=sig;
+    rail.innerHTML=railHtml();
+    rail.querySelectorAll('[data-exact-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactClass)));
+    rail.querySelector('.exact-create-class')?.addEventListener('click',()=>Teacher.showCreateClass());
+    rail.querySelector('[data-exact-nav="dashboard"]')?.addEventListener('click',()=>document.getElementById('teacher-section')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    rail.querySelector('[data-exact-nav="classes"]')?.addEventListener('click',()=>document.getElementById('teacher-selected-class-name')?.scrollIntoView({behavior:'smooth',block:'center'}));
+    rail.querySelector('[data-exact-nav="notifications"]')?.addEventListener('click',()=>Teacher.switchTab('approvals'));
+    rail.querySelector('[data-exact-nav="profile"]')?.addEventListener('click',()=>document.querySelector('.portal-header')?.scrollIntoView({behavior:'smooth',block:'start'}));
+  }
+
+  function markLegacyBlocks(section){
+    const root=section.querySelector(':scope > .space-y-6');
+    if(!root) return;
+    const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID));
+    if(children[0]) children[0].dataset.exactHide='true';
+    if(children[1]) children[1].dataset.exactHide='true';
+  }
+
+  function ensureBreadcrumbs(section){
+    const selectedCard=document.getElementById('teacher-selected-class-name')?.closest('.glass-card');
+    if(!selectedCard) return;
+    let bc=section.querySelector('.exact-breadcrumbs');
+    const c=selectedClass();
+    const tab=Teacher?.state?.tab||'gradebook';
+    const label=tab==='performance'?'Performance':tab.charAt(0).toUpperCase()+tab.slice(1);
+    if(!bc){bc=document.createElement('div');bc.className='exact-breadcrumbs';selectedCard.before(bc)}
+    const sig=[c?.id,c?.subject,c?.section,label].join('|');
+    if(bc.dataset.sig===sig) return;
+    bc.dataset.sig=sig;
+    bc.innerHTML='<span>My Classes</span><i class="fa-solid fa-chevron-right"></i><span>'+(c?.subject||'Selected Class')+(c?.section?' — '+c.section:'')+'</span><i class="fa-solid fa-chevron-right"></i><span>'+label+'</span>';
+  }
+
+  function ensureSummary(){
+    const tabs=document.querySelector('#teacher-section .sg-ref-tabs');
+    const box=document.getElementById('teacher-tab-content');
+    if(!tabs || !box) return;
+    let strip=document.querySelector('#teacher-section .exact-summary-strip');
+    if(Teacher?.state?.tab!=='gradebook'){strip?.remove();return}
+    const c=selectedClass();
+    if(!strip){strip=document.createElement('section');strip.className='exact-summary-strip';tabs.after(strip)}
+    const sig=[c?.id,c?.student_count,c?.pending_count].join('|');
+    if(strip.dataset.sig===sig) return;
+    strip.dataset.sig=sig;
+    strip.innerHTML='<div><i class="fa-solid fa-user-group"></i><span><strong>'+Number(c?.student_count||0)+'</strong><small>Enrolled Students</small></span></div>'+
+      '<div><i class="fa-solid fa-clock"></i><span><strong>'+Number(c?.pending_count||0)+'</strong><small>Pending Approvals</small></span></div>'+
+      '<div><i class="fa-solid fa-pen-to-square"></i><span><strong>Grading in Progress</strong><small>You can encode and update grades.</small></span></div>'+
+      '<div><span class="save-dot"></span><span><strong>Server-backed</strong><small>Current academic data</small></span></div>';
+  }
+
+  function filterByStatus(select){
+    const table=document.getElementById('teacher-grade-table');
+    if(!table) return;
+    const value=select.value;
+    table.querySelectorAll('tbody tr').forEach(row=>{
+      const text=(row.textContent||'').toLowerCase();
+      const keep=value==='all'||(value==='released'?text.includes('released'):value==='finalized'?text.includes('finalized'):!text.includes('released')&&!text.includes('finalized'));
+      row.style.display=keep?'':'none';
+    });
+  }
+
+  function exportCurrentTable(){
+    const table=document.getElementById('teacher-grade-table');if(!table)return;
+    const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>'"'+(td.innerText||'').replace(/"/g,'""').replace(/\s+/g,' ').trim()+'"').join(','));
+    const blob=new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='gradebook-export.csv';a.click();URL.revokeObjectURL(a.href);
+  }
+
+  function decorateGradebookExact(){
+    if(Teacher?.state?.tab!=='gradebook') return;
+    const table=document.getElementById('teacher-grade-table');if(!table)return;
+    const wrapper=table.parentElement;if(wrapper)wrapper.classList.add('exact-grade-panel');
+    const host=table.closest('.space-y-4');const toolbar=host?.firstElementChild;if(!toolbar)return;
+    if(!toolbar.querySelector('.exact-filter-wrap')){
+      const filter=document.createElement('label');filter.className='exact-filter-wrap';
+      filter.innerHTML='<span>Status</span><select><option value="all">All Students</option><option value="progress">In Progress</option><option value="finalized">Finalized</option><option value="released">Released</option></select>';
+      toolbar.appendChild(filter);filter.querySelector('select').addEventListener('change',e=>filterByStatus(e.target));
+    }
+    if(!toolbar.querySelector('.exact-export-btn')){
+      const btn=document.createElement('button');btn.type='button';btn.className='exact-export-btn';btn.innerHTML='<i class="fa-solid fa-download mr-2"></i>Export';
+      btn.addEventListener('click',exportCurrentTable);toolbar.appendChild(btn);
+    }
+    if(wrapper && !wrapper.previousElementSibling?.classList?.contains('exact-grade-title')){
+      const title=document.createElement('div');title.className='exact-grade-title';
+      const n=table.querySelectorAll('tbody tr').length;
+      title.innerHTML='<div><h3>Gradebook</h3><p>Columns follow the active grading system for this class.</p></div><span>Showing '+n+' learner'+(n===1?'':'s')+'</span>';
+      wrapper.before(title);
+    }
+  }
+
+  function decorate(){
+    const section=document.getElementById('teacher-section');
+    if(!teacherVisible()){restoreHeader();return}
+    section.classList.add(ROOT_CLASS);
+    decorateHeader();
+    rebuildRail(section);
+    markLegacyBlocks(section);
+    ensureBreadcrumbs(section);
+    ensureSummary();
+    decorateGradebookExact();
+  }
+
+  let queued=false;
+  const queue=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;decorate()})};
+  new MutationObserver(queue).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+  window.addEventListener('load',queue);
+  queue();
+})();
