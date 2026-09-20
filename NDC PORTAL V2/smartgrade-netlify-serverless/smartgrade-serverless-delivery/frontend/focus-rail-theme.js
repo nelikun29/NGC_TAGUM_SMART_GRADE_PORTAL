@@ -102,14 +102,6 @@
     .fr-brand-mark{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(214,170,50,.14);border:1px solid rgba(246,214,111,.22);color:#f6d66f;font-size:.88rem}
     .fr-brand strong{display:block;font-size:.78rem;letter-spacing:.02em}
     .fr-brand span{display:block;margin-top:2px;font-size:.65rem;color:#aebddd}
-    .fr-section-label{
-      padding:17px 18px 8px;
-      font-size:.59rem;
-      text-transform:uppercase;
-      letter-spacing:.14em;
-      font-weight:800;
-      color:#8095bd;
-    }
     .fr-nav{padding:0 10px 12px;display:flex;flex-direction:column;gap:5px}
     .fr-nav button{
       width:100%;min-height:42px;
@@ -553,7 +545,6 @@
           <div><strong>Teacher Workspace</strong><span>Academic Management</span></div>
         </div>
       </div>
-      <div class="fr-section-label">Workspace</div>
       <nav class="fr-nav">${NAV.map(x=>navButton(x)).join('')}</nav>
       <div class="fr-rail-foot"><strong id="fr-current-class">${selectedClassName()}</strong><p>Focus Rail organizes the existing portal without changing academic records or grade logic.</p></div>
     `;
