@@ -320,6 +320,145 @@
       border:1px dashed #cad6e5;border-radius:14px;padding:22px;text-align:center;background:#fafcff;color:#71809a
     }
 
+    /* =========================================================
+       FOCUS RAIL — PHASE 3 VISUAL HARMONIZATION
+       ========================================================= */
+
+    #teacher-section.sg-focus-rail-active [data-fr-surface="toolbar"]{
+      border:1px solid var(--fr-line)!important;border-radius:14px!important;
+      background:#fbfdff!important;padding:12px 14px!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="section-header"]{
+      position:relative;padding-left:13px!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="section-header"]::before{
+      content:"";position:absolute;left:0;top:3px;bottom:3px;width:3px;border-radius:999px;background:var(--fr-gold)
+    }
+
+    #teacher-section.sg-focus-rail-active [data-fr-surface="student-row"]{
+      border-color:#e8eef5!important;background:#fff!important;transition:background .16s ease,border-color .16s ease
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="student-row"]:hover{background:#f8fbff!important}
+    #teacher-section.sg-focus-rail-active [data-fr-surface="student-avatar"]{
+      background:#edf4ff!important;color:var(--fr-navy)!important;border:1px solid #dce9f8!important
+    }
+
+    #teacher-section.sg-focus-rail-active [data-fr-surface="assessment-card"]{
+      border:1px solid var(--fr-line)!important;border-left:4px solid #9db4d2!important;
+      background:#fff!important;border-radius:15px!important;box-shadow:0 7px 20px rgba(15,35,75,.045)!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="assessment-card"]:has(.bg-emerald-100){
+      border-left-color:#4aa376!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="assessment-card"] h5{
+      color:var(--fr-navy)!important;font-size:.85rem!important;letter-spacing:-.01em
+    }
+
+    #teacher-section.sg-focus-rail-active [data-fr-surface="attendance-card"]{
+      border:1px solid var(--fr-line)!important;background:#fff!important;border-radius:15px!important;
+      box-shadow:0 7px 20px rgba(15,35,75,.045)!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="attendance-card"]::before{
+      content:"";display:block;height:3px;margin:-1rem -1rem .9rem;border-radius:15px 15px 0 0;
+      background:linear-gradient(90deg,var(--fr-navy),#4b7dbd)
+    }
+
+    #teacher-section.sg-focus-rail-active [data-fr-surface="approval-card"]{
+      border:1px solid #eadfb8!important;background:linear-gradient(135deg,#fff 0%,#fffdf7 100%)!important;
+      border-radius:15px!important;box-shadow:0 7px 20px rgba(115,83,12,.045)!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="approval-card"] .bg-amber-100{
+      background:var(--fr-gold-soft)!important;color:#8d6910!important
+    }
+
+    #teacher-section.sg-focus-rail-active [data-fr-surface="settings-panel"]{
+      border:1px solid var(--fr-line)!important;border-radius:16px!important;background:#fff!important;
+      box-shadow:0 8px 24px rgba(15,35,75,.05)!important
+    }
+    #teacher-section.sg-focus-rail-active [data-fr-surface="settings-panel"] label{
+      color:#4f6079!important;font-size:.72rem!important;font-weight:800!important
+    }
+
+    #teacher-section.sg-focus-rail-active button.bg-eduBlue-600,
+    #teacher-section.sg-focus-rail-active button.bg-blue-600,
+    #teacher-section.sg-focus-rail-active button.bg-blue-700{
+      background:var(--fr-navy)!important;color:#fff!important;box-shadow:none!important
+    }
+    #teacher-section.sg-focus-rail-active button.bg-emerald-600{
+      background:#16794d!important;color:#fff!important;box-shadow:none!important
+    }
+    #teacher-section.sg-focus-rail-active button.bg-slate-100,
+    #teacher-section.sg-focus-rail-active button.bg-slate-50{
+      background:#f7f9fc!important;border-color:#dfe7f0!important;color:#52627b!important
+    }
+    #teacher-section.sg-focus-rail-active button.bg-red-50{
+      background:#fff6f6!important;border-color:#f2cccc!important;color:#b4232d!important
+    }
+    #teacher-section.sg-focus-rail-active button:disabled{filter:none!important;transform:none!important}
+
+    #teacher-section.sg-focus-rail-active .bg-amber-50{
+      background:#fffaf0!important
+    }
+    #teacher-section.sg-focus-rail-active .bg-blue-50{
+      background:#f1f7ff!important
+    }
+    #teacher-section.sg-focus-rail-active .bg-slate-50{
+      background:#f8fafc!important
+    }
+
+    body:has(#teacher-section:not(.hidden)) #teacher-class-modal>div.relative,
+    body:has(#teacher-section:not(.hidden)) [id^="teacher-"][id$="-modal"]>div.relative,
+    body:has(#teacher-section:not(.hidden)) [id*="adjust"][id$="-modal"]>div,
+    body:has(#teacher-section:not(.hidden)) [id*="unfinalize"][id$="-modal"]>div{
+      border:1px solid var(--fr-line)!important;border-radius:20px!important;
+      box-shadow:0 28px 80px rgba(15,35,75,.20)!important;overflow:hidden!important
+    }
+    body:has(#teacher-section:not(.hidden)) #teacher-class-modal .bg-slate-800,
+    body:has(#teacher-section:not(.hidden)) [id^="teacher-"][id$="-modal"] .bg-slate-800{
+      background:linear-gradient(135deg,var(--fr-navy),#153c79)!important
+    }
+    body:has(#teacher-section:not(.hidden)) #teacher-class-modal form,
+    body:has(#teacher-section:not(.hidden)) [id^="teacher-"][id$="-modal"] form{
+      background:#fff!important
+    }
+    body:has(#teacher-section:not(.hidden)) #teacher-class-modal input,
+    body:has(#teacher-section:not(.hidden)) #teacher-class-modal select,
+    body:has(#teacher-section:not(.hidden)) [id^="teacher-"][id$="-modal"] input,
+    body:has(#teacher-section:not(.hidden)) [id^="teacher-"][id$="-modal"] select{
+      border-color:#cbd8e7!important;border-radius:10px!important;background:#fff!important
+    }
+    body:has(#teacher-section:not(.hidden)) #teacher-class-modal input:focus,
+    body:has(#teacher-section:not(.hidden)) [id^="teacher-"][id$="-modal"] input:focus{
+      border-color:#86a9d8!important;box-shadow:0 0 0 3px rgba(37,99,235,.09)!important
+    }
+
+    .fr-section-banner{
+      display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+      margin-bottom:14px;padding:14px 16px;border:1px solid var(--fr-line);
+      border-radius:14px;background:linear-gradient(135deg,#fbfdff,#f6f9fd)
+    }
+    .fr-section-banner-icon{
+      width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+      flex:0 0 auto;background:#eaf2ff;color:var(--fr-navy)
+    }
+    .fr-section-banner-copy{min-width:0;flex:1}
+    .fr-section-banner-title{font-size:.82rem;font-weight:900;color:var(--fr-navy)}
+    .fr-section-banner-text{margin-top:2px;font-size:.66rem;line-height:1.45;color:#71809a}
+    .fr-section-banner-badge{
+      flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;padding:5px 8px;
+      border-radius:999px;background:#fff;border:1px solid #dfe7f0;color:#60708a;font-size:.60rem;font-weight:850
+    }
+
+    .fr-form-grid{
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px
+    }
+    .fr-form-help{
+      margin-top:4px;font-size:.61rem;color:#91a0b4;line-height:1.45
+    }
+    .fr-danger-zone{
+      border:1px solid #f0d2d5!important;background:#fff9f9!important;border-radius:14px!important
+    }
+
     @media(max-width:1180px){
       .fr-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
@@ -339,6 +478,9 @@
       #teacher-tab-content{padding:14px!important}
       #teacher-grade-filter{min-width:0!important;width:100%!important}
       #teacher-tab-content>div>div:first-child{align-items:stretch!important}
+      .fr-form-grid{grid-template-columns:1fr}
+      .fr-section-banner{align-items:flex-start;flex-wrap:wrap}
+      .fr-section-banner-badge{margin-left:44px}
     }
     @media print{
       #${RAIL_ID},#${MOBILE_ID}{display:none!important}
@@ -526,6 +668,116 @@
     box.prepend(nav);
   }
 
+  function sectionConfig(tab){
+    const map={
+      students:['Students','Manage the active learner roster for the selected class.','fa-users'],
+      attendance:['Attendance','Create, review and manage attendance sessions and learner check-ins.','fa-calendar-check'],
+      approvals:['Approvals','Review enrollment requests and admit learners into the selected class.','fa-user-check'],
+      quizzes:['Quizzes','Create quizzes, enter scores and manage assessment availability.','fa-circle-question'],
+      performance:['Performance Tasks','Record performance-task scores using the class grading structure.','fa-chart-line'],
+      exams:['Exams','Manage examination records and learner scores.','fa-file-pen'],
+      weights:['Grading Settings','Review class grading weights and component configuration.','fa-sliders']
+    };
+    return map[tab]||null;
+  }
+
+  function ensureSectionBanner(){
+    const tab=Teacher?.state?.tab;
+    if(tab==='gradebook') return;
+    const cfg=sectionConfig(tab);
+    const box=document.getElementById('teacher-tab-content');
+    if(!box||!cfg||box.querySelector('.fr-section-banner')) return;
+
+    const selected=Teacher?.getSelectedClass?.();
+    const banner=document.createElement('div');
+    banner.className='fr-section-banner';
+    banner.innerHTML=`
+      <div class="fr-section-banner-icon"><i class="fa-solid ${cfg[2]}"></i></div>
+      <div class="fr-section-banner-copy"><div class="fr-section-banner-title">${cfg[0]}</div><div class="fr-section-banner-text">${cfg[1]}</div></div>
+      <span class="fr-section-banner-badge"><i class="fa-solid fa-book-open"></i>${esc(selected?.subject||'Selected class')}</span>`;
+    box.prepend(banner);
+  }
+
+  function harmonizeStudents(){
+    if(Teacher?.state?.tab!=='students') return;
+    const box=document.getElementById('teacher-tab-content'); if(!box) return;
+    const rows=[...box.querySelectorAll('div.border-b.border-slate-100')];
+    rows.forEach(row=>{
+      row.dataset.frSurface='student-row';
+      const avatar=row.querySelector('span.flex.h-10.w-10');
+      if(avatar) avatar.dataset.frSurface='student-avatar';
+    });
+    const first=box.querySelector('.space-y-4 > .flex');
+    if(first) first.dataset.frSurface='toolbar';
+  }
+
+  function harmonizeAssessments(){
+    if(!['quizzes','performance','exams'].includes(Teacher?.state?.tab)) return;
+    document.querySelectorAll('#teacher-tab-content [data-assessment-id]').forEach(card=>card.dataset.frSurface='assessment-card');
+    const box=document.getElementById('teacher-tab-content');
+    const first=box?.querySelector(':scope > .space-y-4 > .flex, :scope > .space-y-4 > div:first-child');
+    if(first && !first.classList.contains('fr-assessment-subnav')) first.dataset.frSurface='toolbar';
+  }
+
+  function harmonizeAttendance(){
+    if(Teacher?.state?.tab!=='attendance') return;
+    const box=document.getElementById('teacher-tab-content'); if(!box) return;
+    box.querySelectorAll('.glass-card').forEach(card=>{
+      if(card.querySelector('button') || /attendance|session/i.test(card.textContent||'')) card.dataset.frSurface='attendance-card';
+    });
+    const first=box.querySelector('.space-y-4 > .flex, .space-y-5 > .flex');
+    if(first) first.dataset.frSurface='toolbar';
+  }
+
+  function harmonizeApprovals(){
+    if(Teacher?.state?.tab!=='approvals') return;
+    const box=document.getElementById('teacher-tab-content'); if(!box) return;
+    box.querySelectorAll('.glass-card, [class*="border-amber"], [class*="bg-amber"]').forEach(card=>{
+      const target=card.closest('.glass-card')||card;
+      if(target && target!==box) target.dataset.frSurface='approval-card';
+    });
+  }
+
+  function harmonizeSettings(){
+    if(Teacher?.state?.tab!=='weights') return;
+    const box=document.getElementById('teacher-tab-content'); if(!box) return;
+    box.querySelectorAll('.glass-card, form, [class*="rounded-2xl"]').forEach(panel=>{
+      if(panel!==box && !panel.classList.contains('fr-section-banner')) panel.dataset.frSurface='settings-panel';
+    });
+  }
+
+  function harmonizeEmptyStates(){
+    const box=document.getElementById('teacher-tab-content'); if(!box) return;
+    box.querySelectorAll('.text-center').forEach(el=>{
+      const text=(el.textContent||'').trim();
+      if(text && (/no |empty|nothing|not found|loading/i.test(text)) && !el.closest('table')) el.classList.add('fr-empty-quiet');
+    });
+  }
+
+  function harmonizeTeacherSurfaces(){
+    ensureSectionBanner();
+    harmonizeStudents();
+    harmonizeAssessments();
+    harmonizeAttendance();
+    harmonizeApprovals();
+    harmonizeSettings();
+    harmonizeEmptyStates();
+  }
+
+  function decorateTeacherModals(){
+    if(Store?.user?.role!=='teacher') return;
+    const modal=document.getElementById('teacher-class-modal');
+    if(modal){
+      const card=modal.querySelector(':scope > div.relative');
+      card?.setAttribute('data-fr-modal','class');
+      const protectedInfo=card?.querySelector('.bg-slate-50.border');
+      if(protectedInfo) protectedInfo.dataset.frSurface='settings-panel';
+    }
+    document.querySelectorAll('[id*="adjust"][id$="-modal"],[id*="unfinalize"][id$="-modal"]').forEach(m=>{
+      m.setAttribute('data-fr-modal','teacher');
+    });
+  }
+
   function decorateGradebook(){
     const table=document.getElementById('teacher-grade-table');
     if(!table) return;
@@ -564,6 +816,8 @@
     ensureSummary(section);
     decorateGradebook();
     ensureAssessmentSubnav();
+    harmonizeTeacherSurfaces();
+    decorateTeacherModals();
     syncRailBadges();
     const current=document.getElementById('fr-current-class');
     if(current) current.textContent=selectedClassName();
@@ -589,6 +843,9 @@
   document.addEventListener('DOMContentLoaded',queueDecorate);
   document.addEventListener('click',e=>{
     if(e.target.closest('#teacher-section .tab-btn')) setTimeout(syncActive,0);
+    if(e.target.closest('[onclick*="showCreateClass"],[onclick*="editClass"],[onclick*="openAdjustmentModal"],[onclick*="requestUnfinalize"]')){
+      setTimeout(decorateTeacherModals,0);
+    }
   });
 
   new MutationObserver(queueDecorate).observe(document.body,{childList:true,subtree:true});
