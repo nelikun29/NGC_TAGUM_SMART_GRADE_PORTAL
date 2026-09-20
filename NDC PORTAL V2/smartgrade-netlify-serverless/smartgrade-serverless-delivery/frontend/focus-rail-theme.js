@@ -82,6 +82,21 @@
     }
     body:has(#student-section:not(.hidden)) #logout-btn:hover{background:#dc2626!important}
 
+    body:has(#admin-section:not(.hidden)) #user-header-profile{
+      background:#f8fafc!important;border-color:var(--fr-line)!important;color:var(--fr-ink)!important
+    }
+    body:has(#admin-section:not(.hidden)) #user-header-profile>div:first-child{
+      display:none!important
+    }
+    body:has(#admin-section:not(.hidden)) #logout-btn{
+      width:auto!important;height:40px!important;min-height:40px!important;
+      display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;
+      padding:0 13px!important;border-radius:11px!important;
+      background:#ef4444!important;color:#fff!important;
+      font-size:.72rem!important;font-weight:850!important;box-shadow:0 7px 16px rgba(239,68,68,.18)!important
+    }
+    body:has(#admin-section:not(.hidden)) #logout-btn:hover{background:#dc2626!important}
+
 
     #teacher-section::before,#teacher-section::after{display:none!important}
     #teacher-section{color:var(--fr-ink)!important}
@@ -858,7 +873,7 @@
   function decorateLogout(){
     const btn=document.getElementById('logout-btn');
     const role=Store?.user?.role;
-    if(!btn || !['teacher','student'].includes(role)) return;
+    if(!btn || !['teacher','student','admin'].includes(role)) return;
     if(btn.dataset.frLabeled==='true') return;
     btn.dataset.frLabeled='true';
     btn.innerHTML='<i class="fa-solid fa-right-from-bracket"></i><span>Log out</span>';
@@ -907,6 +922,12 @@
     decorateLogout();
   }
 
+  function decorateAdminHeader(){
+    const section=document.getElementById('admin-section');
+    if(!section || section.classList.contains('hidden')) return;
+    decorateLogout();
+  }
+
   let queued=false;
   function queueDecorate(){
     if(queued) return;
@@ -915,6 +936,7 @@
       queued=false;
       decorateTeacher();
       decorateStudentHeader();
+      decorateAdminHeader();
     });
   }
 
