@@ -462,6 +462,32 @@
       border:1px solid #f0d2d5!important;background:#fff9f9!important;border-radius:14px!important
     }
 
+    /* =========================================================
+       STUDENT DASHBOARD — CLASS CARD GRID
+       ========================================================= */
+    #student-section .lg\:col-span-2.space-y-4{
+      display:grid!important;
+      grid-template-columns:repeat(2,minmax(0,1fr))!important;
+      gap:18px!important;
+      align-items:start!important;
+    }
+    #student-section .lg\:col-span-2.space-y-4 > h3{
+      grid-column:1 / -1!important;
+      margin-bottom:0!important;
+    }
+    #student-section .lg\:col-span-2.space-y-4 > .glass-card{
+      margin:0!important;
+      height:100%!important;
+    }
+    #student-section .lg\:col-span-2.space-y-4 > p{
+      grid-column:1 / -1!important;
+    }
+    @media(max-width:1100px){
+      #student-section .lg\:col-span-2.space-y-4{
+        grid-template-columns:1fr!important;
+      }
+    }
+
     @media(max-width:1180px){
       .fr-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
