@@ -171,10 +171,7 @@
     }
 
     #teacher-section.sg-focus-rail-active .sg-ref-tabs{
-      background:#fff!important;border:1px solid var(--fr-line)!important;
-      border-radius:18px 18px 0 0!important;
-      box-shadow:none!important;
-      padding:7px 8px 0!important;
+      display:none!important;
     }
     #teacher-section.sg-focus-rail-active .tab-btn{
       color:#64748b!important;background:transparent!important;border-radius:10px 10px 0 0!important;font-weight:750!important
@@ -187,8 +184,8 @@
 
     #teacher-tab-content{
       background:#fff!important;color:var(--fr-ink)!important;
-      border:1px solid var(--fr-line)!important;border-top:0!important;
-      border-radius:0 0 18px 18px!important;
+      border:1px solid var(--fr-line)!important;
+      border-radius:18px!important;
       box-shadow:var(--fr-shadow)!important;
       backdrop-filter:none!important;
     }
