@@ -50,7 +50,7 @@
       background:#f8fafc!important;border-color:var(--fr-line)!important;color:var(--fr-ink)!important
     }
     body:has(#teacher-section:not(.hidden)) #user-header-profile>div:first-child{
-      background:var(--fr-gold-soft)!important;color:var(--fr-navy)!important
+      display:none!important
     }
     body:has(#teacher-section:not(.hidden)) #user-role-badge{
       background:#eaf2ff!important;color:var(--fr-navy)!important
