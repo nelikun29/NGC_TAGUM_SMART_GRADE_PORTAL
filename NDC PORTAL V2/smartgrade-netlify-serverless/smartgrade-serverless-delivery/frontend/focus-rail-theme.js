@@ -1,6 +1,15 @@
 // Focus Rail UI — presentation layer only.
 // No API, authentication, grading, permissions, database, or Netlify behavior is changed.
 (() => {
+  // Emergency presentation-only fallback for staging/troubleshooting:
+  // append ?focusRail=off to the portal URL to load the original UI.
+  // This does not alter authentication, data, or server behavior.
+  const focusRailParam = new URLSearchParams(window.location.search).get('focusRail');
+  if (String(focusRailParam || '').toLowerCase() === 'off') {
+    console.info('[Focus Rail] Disabled by URL parameter.');
+    return;
+  }
+
   const STYLE_ID = 'sg-focus-rail-theme';
   const RAIL_ID = 'sg-focus-rail';
   const MOBILE_ID = 'sg-focus-mobile-nav';
