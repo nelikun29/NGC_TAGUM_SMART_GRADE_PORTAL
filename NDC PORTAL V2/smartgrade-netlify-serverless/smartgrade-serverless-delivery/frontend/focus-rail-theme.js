@@ -236,10 +236,102 @@
     }
     #${MOBILE_ID} button.active{background:var(--fr-navy)!important;color:#fff!important;border-color:var(--fr-navy)!important}
 
+    /* =========================================================
+       FOCUS RAIL — PHASE 2 WORKSPACE REFINEMENT
+       ========================================================= */
+    .fr-workspace-masthead{
+      position:relative;overflow:hidden;
+      display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+      padding:22px 24px;
+      border:1px solid var(--fr-line);border-radius:20px;
+      background:linear-gradient(135deg,#ffffff 0%,#f8fbff 62%,#fffaf0 100%);
+      box-shadow:var(--fr-shadow);
+    }
+    .fr-workspace-masthead::after{
+      content:"";position:absolute;right:-55px;top:-75px;width:190px;height:190px;border-radius:50%;
+      background:radial-gradient(circle,rgba(214,170,50,.13),transparent 68%);pointer-events:none;
+    }
+    .fr-kicker{font-size:.61rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#7a8ba6}
+    .fr-workspace-title{margin-top:5px;font-size:1.48rem;line-height:1.15;font-weight:900;letter-spacing:-.028em;color:var(--fr-navy)}
+    .fr-workspace-subtitle{margin-top:6px;max-width:680px;font-size:.76rem;line-height:1.55;color:var(--fr-muted)}
+    .fr-masthead-actions{position:relative;z-index:2;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .fr-action-primary,.fr-action-secondary{
+      display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:39px;
+      padding:9px 12px;border-radius:10px;font-size:.70rem;font-weight:850!important;white-space:nowrap;
+      transform:none!important;filter:none!important
+    }
+    .fr-action-primary{background:var(--fr-navy)!important;color:#fff!important;box-shadow:0 7px 18px rgba(11,36,87,.16)}
+    .fr-action-secondary{background:#fff!important;color:var(--fr-navy)!important;border:1px solid var(--fr-line)!important}
+    .fr-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .fr-summary-card{
+      position:relative;overflow:hidden;min-height:90px;padding:15px 16px;
+      border:1px solid var(--fr-line);border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(15,35,75,.055)
+    }
+    .fr-summary-card::after{
+      content:"";position:absolute;right:-26px;bottom:-34px;width:86px;height:86px;border-radius:50%;
+      background:#f4f8fd
+    }
+    .fr-summary-card .fr-stat-icon{
+      width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+      background:#edf4ff;color:var(--fr-navy);font-size:.72rem
+    }
+    .fr-summary-card.fr-summary-gold .fr-stat-icon{background:var(--fr-gold-soft);color:#8a650c}
+    .fr-summary-label{margin-top:10px;font-size:.61rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;color:#8190a7}
+    .fr-summary-value{margin-top:2px;font-size:1.15rem;font-weight:900;color:var(--fr-navy);letter-spacing:-.02em}
+    .fr-summary-note{margin-top:1px;font-size:.61rem;color:#94a3b8}
+    .fr-rail-badge{
+      margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+      display:inline-flex;align-items:center;justify-content:center;
+      background:rgba(255,255,255,.11);color:#dbe7fb;font-size:.57rem;font-weight:900
+    }
+    .fr-nav button.active .fr-rail-badge{background:rgba(246,214,111,.16);color:#f6d66f}
+    .fr-context-line{
+      display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;font-size:.66rem;color:#71809a
+    }
+    .fr-context-chip{
+      display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;
+      background:#f3f6fa;border:1px solid #e2e8f0;color:#53627b;font-weight:750
+    }
+    #teacher-grade-table thead th:first-child,
+    #teacher-grade-table tbody td:first-child{
+      position:sticky;left:0;z-index:3;background:#fff!important;box-shadow:1px 0 0 #e5ebf3
+    }
+    #teacher-grade-table thead th:first-child{z-index:5;background:#f4f7fb!important}
+    #teacher-grade-table tbody tr:nth-child(even) td{background:#fbfcfe}
+    #teacher-grade-table tbody tr:hover td{background:#f5f9ff!important}
+    #teacher-grade-table tbody tr:hover td:first-child{background:#f5f9ff!important}
+    .fr-grade-meta{
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px
+    }
+    .fr-grade-meta span{
+      display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid #e5ebf3;
+      border-radius:999px;background:#f8fafc;font-size:.62rem;font-weight:750;color:#66758d
+    }
+    .fr-grade-meta .fr-grade-count{background:#edf4ff;color:var(--fr-navy);border-color:#d9e7fa}
+    .fr-assessment-subnav{
+      display:flex;gap:7px;flex-wrap:wrap;padding:10px 0 2px;margin-bottom:8px
+    }
+    .fr-assessment-subnav button{
+      min-height:36px;padding:8px 11px;border-radius:9px;border:1px solid var(--fr-line);
+      background:#fff;color:#596984;font-size:.67rem;font-weight:850;transform:none!important;filter:none!important
+    }
+    .fr-assessment-subnav button.active{background:var(--fr-navy)!important;color:#fff!important;border-color:var(--fr-navy)!important}
+    .fr-empty-quiet{
+      border:1px dashed #cad6e5;border-radius:14px;padding:22px;text-align:center;background:#fafcff;color:#71809a
+    }
+
+    @media(max-width:1180px){
+      .fr-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
     @media(max-width:1024px){
       #teacher-section.sg-focus-rail-active:not(.hidden){display:block!important}
       #${RAIL_ID}{display:none!important}
       #${MOBILE_ID}{display:flex}
+    }
+    @media(max-width:760px){
+      .fr-workspace-masthead{padding:18px;flex-direction:column}
+      .fr-masthead-actions{width:100%;justify-content:flex-start}
+      .fr-summary-grid{grid-template-columns:1fr 1fr;gap:9px}
     }
     @media(max-width:640px){
       body:has(#teacher-section:not(.hidden)) main{padding-left:10px!important;padding-right:10px!important}
@@ -272,8 +364,9 @@
 
   function navButton(item, mobile=false){
     const active = activeKey() === item.key;
+    const badge = mobile ? '' : '<span class="fr-rail-badge" data-fr-badge="'+item.key+'" style="display:none"></span>';
     return `<button type="button" data-fr-key="${item.key}" class="${active?'active':''}" aria-current="${active?'page':'false'}">
-      <i class="fa-solid ${item.icon}"></i><span>${item.label}</span>
+      <i class="fa-solid ${item.icon}"></i><span>${item.label}</span>${badge}
     </button>`;
   }
 
@@ -337,6 +430,102 @@
     if(root) root.prepend(nav); else section.prepend(nav);
   }
 
+  function classStats(){
+    const rows=Array.isArray(Teacher?._classes)?Teacher._classes:[];
+    const classes=rows.length;
+    const students=rows.reduce((n,x)=>n+Number(x.student_count||0),0);
+    const pending=rows.reduce((n,x)=>n+Number(x.pending_count||0),0);
+    const selected=Teacher?.getSelectedClass?.()||null;
+    return {classes,students,pending,selected};
+  }
+
+  function ensureWorkspaceMasthead(section){
+    const root=section?.querySelector(':scope > .space-y-6');
+    if(!root) return;
+    let host=root.querySelector('.fr-workspace-masthead');
+    const stats=classStats();
+    const user=Store?.user;
+    const teacherName=user?.profile
+      ? [user.profile.first_name,user.profile.last_name].filter(Boolean).join(' ')
+      : (user?.email||'Teacher');
+
+    if(!host){
+      host=document.createElement('section');
+      host.className='fr-workspace-masthead';
+      const mobile=root.querySelector('#'+MOBILE_ID);
+      if(mobile) mobile.after(host); else root.prepend(host);
+    }
+
+    const selected=stats.selected;
+    const classMeta=selected
+      ? [selected.year_level,selected.section,selected.room_number?('Room '+selected.room_number):null].filter(Boolean)
+      : [];
+
+    host.innerHTML=`
+      <div class="relative z-[2] min-w-0">
+        <div class="fr-kicker">Teacher Workspace</div>
+        <h2 class="fr-workspace-title">Welcome, ${esc(teacherName)}</h2>
+        <p class="fr-workspace-subtitle">Manage classes, learners, attendance, assessments and grades from one focused academic workspace.</p>
+        <div class="fr-context-line">
+          <span class="fr-context-chip"><i class="fa-solid fa-book-open"></i> ${esc(selected?.subject||'No class selected')}</span>
+          ${classMeta.map(x=>'<span class="fr-context-chip">'+esc(x)+'</span>').join('')}
+        </div>
+      </div>
+      <div class="fr-masthead-actions">
+        <button type="button" class="fr-action-secondary" onclick="Teacher.switchTab('gradebook')"><i class="fa-solid fa-table-list"></i> Gradebook</button>
+        <button type="button" class="fr-action-primary" onclick="Teacher.showCreateClass()"><i class="fa-solid fa-plus"></i> New Class</button>
+      </div>`;
+  }
+
+  function ensureSummary(section){
+    const root=section?.querySelector(':scope > .space-y-6');
+    if(!root) return;
+    let grid=root.querySelector('.fr-summary-grid');
+    if(!grid){
+      grid=document.createElement('div');
+      grid.className='fr-summary-grid';
+      const mast=root.querySelector('.fr-workspace-masthead');
+      if(mast) mast.after(grid); else root.prepend(grid);
+    }
+    const s=classStats();
+    grid.innerHTML=`
+      <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-layer-group"></i></div><div class="fr-summary-label">Classes</div><div class="fr-summary-value">${s.classes}</div><div class="fr-summary-note">Managed classes</div></div>
+      <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-users"></i></div><div class="fr-summary-label">Students</div><div class="fr-summary-value">${s.students}</div><div class="fr-summary-note">Across active classes</div></div>
+      <div class="fr-summary-card fr-summary-gold"><div class="fr-stat-icon"><i class="fa-solid fa-user-clock"></i></div><div class="fr-summary-label">Pending</div><div class="fr-summary-value">${s.pending}</div><div class="fr-summary-note">Enrollment approvals</div></div>
+      <div class="fr-summary-card"><div class="fr-stat-icon"><i class="fa-solid fa-book-open-reader"></i></div><div class="fr-summary-label">Current Class</div><div class="fr-summary-value text-[.94rem]">${esc(s.selected?.subject||'—')}</div><div class="fr-summary-note">${esc(s.selected?.section||'Select a class')}</div></div>`;
+  }
+
+  function syncRailBadges(){
+    const s=classStats();
+    const values={classes:s.classes,students:s.students,approvals:s.pending};
+    Object.entries(values).forEach(([key,value])=>{
+      document.querySelectorAll('[data-fr-badge="'+key+'"]').forEach(el=>{
+        const n=Number(value||0);
+        el.textContent=n>99?'99+':String(n);
+        el.style.display=n>0?'inline-flex':'none';
+      });
+    });
+  }
+
+  function ensureAssessmentSubnav(){
+    if(!['quizzes','performance','exams'].includes(Teacher?.state?.tab)) return;
+    const box=document.getElementById('teacher-tab-content');
+    if(!box || box.querySelector('.fr-assessment-subnav')) return;
+    const nav=document.createElement('div');
+    nav.className='fr-assessment-subnav';
+    const items=[
+      ['quizzes','Quizzes','fa-circle-question'],
+      ['performance','Performance Tasks','fa-chart-line'],
+      ['exams','Exams','fa-file-pen']
+    ];
+    nav.innerHTML=items.map(([key,label,icon])=>`<button type="button" class="${Teacher.state.tab===key?'active':''}" data-fr-assessment="${key}"><i class="fa-solid ${icon} mr-1"></i>${label}</button>`).join('');
+    nav.addEventListener('click',e=>{
+      const btn=e.target.closest('[data-fr-assessment]');
+      if(btn) Teacher.switchTab(btn.dataset.frAssessment);
+    });
+    box.prepend(nav);
+  }
+
   function decorateGradebook(){
     const table=document.getElementById('teacher-grade-table');
     if(!table) return;
@@ -348,7 +537,17 @@
       wrapper.style.boxShadow='none';
     }
     const toolbar=table.closest('.space-y-4')?.firstElementChild;
-    if(toolbar) toolbar.classList.add('fr-grade-toolbar');
+    if(toolbar){
+      toolbar.classList.add('fr-grade-toolbar');
+      const intro=toolbar.firstElementChild;
+      if(intro && !intro.querySelector('.fr-grade-meta')){
+        const rows=table.querySelectorAll('tbody tr').length;
+        const meta=document.createElement('div');
+        meta.className='fr-grade-meta';
+        meta.innerHTML='<span class="fr-grade-count"><i class="fa-solid fa-users"></i>'+rows+' learner'+(rows===1?'':'s')+'</span><span><i class="fa-solid fa-shield-halved"></i> Server-calculated grades</span>';
+        intro.appendChild(meta);
+      }
+    }
   }
 
   function decorateTeacher(){
@@ -361,7 +560,11 @@
     selected?.closest('.glass-card')?.classList.add('sg-ref-selected');
     const tabContent=document.getElementById('teacher-tab-content');
     tabContent?.previousElementSibling?.classList.add('sg-ref-tabs');
+    ensureWorkspaceMasthead(section);
+    ensureSummary(section);
     decorateGradebook();
+    ensureAssessmentSubnav();
+    syncRailBadges();
     const current=document.getElementById('fr-current-class');
     if(current) current.textContent=selectedClassName();
     syncActive();
