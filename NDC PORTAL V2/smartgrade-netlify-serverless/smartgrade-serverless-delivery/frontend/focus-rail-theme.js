@@ -109,7 +109,7 @@
     #teacher-section.sg-focus-rail-active>.space-y-6{min-width:0;margin:0!important}
     #teacher-section.sg-focus-rail-active .sg-ref-heading,
     #teacher-section.sg-focus-rail-active .sg-ref-heading h2,
-    #teacher-section.sg-focus-rail-active .sg-ref-heading h3{color:var(--fr-navy)!important}
+    #teacher-section.sg-focus-rail-active .sg-ref-heading h3{color:#fff!important}
     #teacher-section.sg-focus-rail-active .sg-ref-heading::before{display:none!important}
 
     #${RAIL_ID}{
