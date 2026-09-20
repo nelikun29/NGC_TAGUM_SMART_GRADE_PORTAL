@@ -58,6 +58,15 @@
     body:has(#teacher-section:not(.hidden)) .notification-btn{
       background:#f8fafc!important;border-color:var(--fr-line)!important;color:var(--fr-navy)!important
     }
+    body:has(#teacher-section:not(.hidden)) #logout-btn{
+      width:auto!important;height:40px!important;min-height:40px!important;
+      display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;
+      padding:0 13px!important;border-radius:11px!important;
+      background:#ef4444!important;color:#fff!important;
+      font-size:.72rem!important;font-weight:850!important;box-shadow:0 7px 16px rgba(239,68,68,.18)!important
+    }
+    body:has(#teacher-section:not(.hidden)) #logout-btn:hover{background:#dc2626!important}
+
 
     #teacher-section::before,#teacher-section::after{display:none!important}
     #teacher-section{color:var(--fr-ink)!important}
@@ -816,10 +825,21 @@
     }
   }
 
+  function decorateLogout(){
+    const btn=document.getElementById('logout-btn');
+    if(!btn || Store?.user?.role!=='teacher') return;
+    if(btn.dataset.frLabeled==='true') return;
+    btn.dataset.frLabeled='true';
+    btn.innerHTML='<i class="fa-solid fa-right-from-bracket"></i><span>Log out</span>';
+    btn.setAttribute('aria-label','Log out');
+    btn.setAttribute('title','Log out');
+  }
+
   function decorateTeacher(){
     const section=document.getElementById('teacher-section');
     if(!section || section.classList.contains('hidden')) return;
     section.classList.add('sg-focus-rail-active');
+    decorateLogout();
     buildRail(section);
     buildMobile(section);
     const selected=document.getElementById('teacher-selected-class-name');
