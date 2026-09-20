@@ -467,7 +467,7 @@
        ========================================================= */
     #student-section .student-class-card-grid{
       display:grid!important;
-      grid-template-columns:repeat(2,minmax(0,1fr))!important;
+      grid-template-columns:minmax(0,1fr)!important;
       gap:18px!important;
       align-items:start!important;
       width:100%!important;
@@ -480,11 +480,6 @@
     }
     #student-section .student-class-card-grid > p{
       grid-column:1 / -1!important;
-    }
-    @media(max-width:1100px){
-      #student-section .student-class-card-grid{
-        grid-template-columns:1fr!important;
-      }
     }
 
     @media(max-width:1180px){
