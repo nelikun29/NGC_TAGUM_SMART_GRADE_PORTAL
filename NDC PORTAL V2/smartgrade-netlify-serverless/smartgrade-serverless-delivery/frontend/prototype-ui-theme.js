@@ -154,11 +154,20 @@
         min-width:0;
       }
       #student-section > .grid > .lg\\:col-span-2 > h3{
-        color:var(--ndc-navy)!important;
+        color:#fff!important;
         font-size:1.55rem!important;
         font-weight:900!important;
         letter-spacing:-.025em!important;
-        margin:2px 0 14px!important;
+        margin:2px 0 8px!important;
+        text-shadow:0 1px 2px rgba(0,0,0,.12)!important;
+      }
+      #student-section > .grid > .lg\\:col-span-2{
+        color:#fff!important;
+      }
+      #student-section > .grid > .lg\\:col-span-2 > p{
+        color:rgba(255,255,255,.88)!important;
+        font-size:.95rem!important;
+        margin:0 0 16px!important;
       }
       #student-section .student-class-card-grid{
         display:grid!important;
