@@ -90,7 +90,7 @@
       border-bottom:1px solid rgba(255,255,255,.10);
     }
     .fr-brand-row{display:flex;align-items:center;gap:11px}
-    .fr-brand img{width:38px;height:38px;border-radius:50%;background:#fff;object-fit:contain;box-shadow:0 0 0 2px rgba(214,170,50,.45)}
+    .fr-brand-mark{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(214,170,50,.14);border:1px solid rgba(246,214,111,.22);color:#f6d66f;font-size:.88rem}
     .fr-brand strong{display:block;font-size:.78rem;letter-spacing:.02em}
     .fr-brand span{display:block;margin-top:2px;font-size:.65rem;color:#aebddd}
     .fr-section-label{
@@ -552,8 +552,8 @@
     aside.innerHTML = `
       <div class="fr-brand">
         <div class="fr-brand-row">
-          <img src="./assets/logo.png" alt="">
-          <div><strong>NDC Academic Portal</strong><span>Teacher Workspace</span></div>
+          <div class="fr-brand-mark" aria-hidden="true"><i class="fa-solid fa-graduation-cap"></i></div>
+          <div><strong>Teacher Workspace</strong><span>Academic Management</span></div>
         </div>
       </div>
       <div class="fr-section-label">Workspace</div>
