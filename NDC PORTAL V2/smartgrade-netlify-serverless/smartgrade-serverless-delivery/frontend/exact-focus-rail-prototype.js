@@ -104,7 +104,22 @@
     .exact-class-item:hover{background:rgba(255,255,255,.055)!important}
     .exact-class-item.selected{background:rgba(255,255,255,.10)!important;border-left-color:var(--efr-gold)!important}
     .exact-class-item strong{display:block;max-width:168px;color:#fff;font-size:.73rem;line-height:1.35;font-weight:900}
-    .exact-class-item small{display:block;margin-top:5px;color:#b8c7d8;font-size:.61rem;font-weight:650}
+    .exact-class-item small{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px;color:#b8c7d8;font-size:.61rem;font-weight:650}
+    .exact-copy-code{
+      display:inline-flex!important;align-items:center!important;justify-content:center!important;
+      width:22px!important;height:22px!important;min-width:22px!important;padding:0!important;margin-left:2px!important;
+      border:1px solid rgba(255,255,255,.18)!important;border-radius:7px!important;
+      background:rgba(255,255,255,.08)!important;color:#dbe7f5!important;font-size:.58rem!important;
+      vertical-align:middle!important
+    }
+    .exact-copy-code:hover{background:rgba(255,255,255,.16)!important;color:#fff!important}
+    .exact-selected-copy{
+      display:inline-flex!important;align-items:center!important;justify-content:center!important;
+      width:24px!important;height:24px!important;padding:0!important;margin-left:4px!important;
+      border:1px solid #cbd5e1!important;border-radius:7px!important;background:#fff!important;
+      color:var(--efr-blue)!important;font-size:.62rem!important;vertical-align:middle!important
+    }
+    .exact-selected-copy:hover{background:#eef4ff!important}
     .exact-class-item .count{
       position:absolute;right:14px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
       background:#e6eef7;color:var(--efr-navy);font-size:.63rem;font-weight:900
@@ -515,7 +530,10 @@
         ${rows.map(c=>`
           <button type="button" class="exact-class-item ${String(c.id)===String(selected?.id)?'selected':''}" data-exact-class="${String(c.id).replace(/"/g,'&quot;')}">
             <strong>${String(c.subject||'Untitled Subject').replace(/</g,'&lt;')}</strong>
-            <small>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.class_code?' &nbsp;•&nbsp; Class Code: '+String(c.class_code).replace(/</g,'&lt;'):''}</small>
+            <small>
+              <span>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.class_code?' &nbsp;•&nbsp; Class Code: '+String(c.class_code).replace(/</g,'&lt;'):''}</span>
+              ${c.class_code?'<button type="button" class="exact-copy-code" title="Copy class code" aria-label="Copy class code" onclick="event.stopPropagation(); Teacher.copyClassCode(\''+String(c.class_code).replace(/\\/g,'\\\\').replace(/\'/g,"\\'")+'\')"><i class="fa-regular fa-copy"></i></button>':''}
+            </small>
             <span class="count">${Number(c.student_count||0)}</span>
           </button>
         `).join('')}
@@ -561,9 +579,15 @@
     const c=selectedClass();
     if(!meta || !c) return;
     const parts=[c.year_level,c.section].filter(Boolean);
-    const code=c.class_code ? 'Class Code: '+c.class_code : '';
-    const next=[...parts,code].filter(Boolean).join(' • ');
-    if(meta.textContent.trim()!==next) meta.textContent=next;
+    const codeText=c.class_code ? 'Class Code: '+c.class_code : '';
+    const visible=[...parts,codeText].filter(Boolean).join(' • ');
+    const sig=[c.id,visible].join('|');
+    if(meta.dataset.exactCodeSig===sig) return;
+    meta.dataset.exactCodeSig=sig;
+    meta.innerHTML='<span>'+esc(visible)+'</span>'+(c.class_code
+      ? ' <button type="button" class="exact-selected-copy" title="Copy class code" aria-label="Copy class code"><i class="fa-regular fa-copy"></i></button>'
+      : '');
+    meta.querySelector('.exact-selected-copy')?.addEventListener('click',()=>Teacher.copyClassCode(c.class_code));
   }
 
   function ensureBreadcrumbs(section){
