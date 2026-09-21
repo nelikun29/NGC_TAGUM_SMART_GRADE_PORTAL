@@ -515,7 +515,7 @@
         ${rows.map(c=>`
           <button type="button" class="exact-class-item ${String(c.id)===String(selected?.id)?'selected':''}" data-exact-class="${String(c.id).replace(/"/g,'&quot;')}">
             <strong>${String(c.subject||'Untitled Subject').replace(/</g,'&lt;')}</strong>
-            <small>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}</small>
+            <small>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.class_code?' &nbsp;•&nbsp; '+String(c.class_code).replace(/</g,'&lt;'):''}</small>
             <span class="count">${Number(c.student_count||0)}</span>
           </button>
         `).join('')}
@@ -554,6 +554,15 @@
     const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID));
     if(children[0]) children[0].dataset.exactHide='true';
     if(children[1]) children[1].dataset.exactHide='true';
+  }
+
+  function ensureSelectedClassCode(){
+    const meta=document.getElementById('teacher-selected-class-meta');
+    const c=selectedClass();
+    if(!meta || !c) return;
+    const parts=[c.year_level,c.section,c.class_code].filter(Boolean);
+    const next=parts.join(' • ');
+    if(meta.textContent.trim()!==next) meta.textContent=next;
   }
 
   function ensureBreadcrumbs(section){
@@ -634,6 +643,7 @@
     decorateHeader();
     rebuildRail(section);
     markLegacyBlocks(section);
+    ensureSelectedClassCode();
     ensureBreadcrumbs(section);
     ensureSummary();
     decorateGradebookExact();
