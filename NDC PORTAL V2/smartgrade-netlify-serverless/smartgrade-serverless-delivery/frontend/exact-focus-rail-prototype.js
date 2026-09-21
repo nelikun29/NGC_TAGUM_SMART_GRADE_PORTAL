@@ -35,6 +35,20 @@
     body:has(#teacher-section:not(.hidden)) .portal-header .max-w-7xl{
       max-width:none!important;padding-left:292px!important;padding-right:24px!important
     }
+    body:has(#teacher-section:not(.hidden)) .portal-header #institution-name-header{
+      line-height:1.02!important;
+      margin:0!important;
+    }
+    body:has(#teacher-section:not(.hidden)) .portal-header h1{
+      line-height:1.06!important;
+      margin-top:2px!important;
+      margin-bottom:0!important;
+    }
+    body:has(#teacher-section:not(.hidden)) .portal-header #institution-name-header + h1 + p{
+      line-height:1.08!important;
+      margin-top:2px!important;
+      margin-bottom:0!important;
+    }
     .exact-teacher-heading h1{margin:0;color:var(--efr-ink)!important;font-size:1.2rem;line-height:1.15;font-weight:900;letter-spacing:-.02em}
     .exact-teacher-heading p{margin:4px 0 0!important;color:#7a899a!important;font-size:.70rem!important;font-weight:600}
 
