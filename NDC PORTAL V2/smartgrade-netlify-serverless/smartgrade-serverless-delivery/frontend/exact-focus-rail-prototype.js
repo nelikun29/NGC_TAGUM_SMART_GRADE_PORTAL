@@ -349,6 +349,10 @@
     exactView=view;
     const section=document.getElementById('teacher-section');
     if(section) section.dataset.exactView=view;
+    if(view==='notifications'){
+      const panel=section?.querySelector('.exact-view-panel');
+      if(panel) delete panel.dataset.notificationsState;
+    }
     syncExactNav();
     renderExactView();
   }
@@ -389,7 +393,37 @@
     return panel;
   }
 
-  async function renderNotificationsPanel(panel){
+  async function renderNotificationsPanel(panel, force=false){
+    const classes=classRows();
+    const notificationKey=JSON.stringify(classes.map(c=>[c.id,c.pending_count||0]));
+    const loadingState='loading:'+notificationKey;
+    const readyState='ready:'+notificationKey;
+
+    if(!force && (panel.dataset.notificationsState===loadingState || panel.dataset.notificationsState===readyState)){
+      return;
+    }
+
+    panel.dataset.notificationsState=loadingState;
+
+    if(classes.length===0){
+      panel.innerHTML=`
+        <div class="exact-page-head">
+          <div class="exact-page-kicker">Notifications</div>
+          <h2>Pending Enrollment Requests</h2>
+          <p>0 pending requests across all subjects you created.</p>
+        </div>
+        <div class="exact-notification-list">
+          <div class="exact-big-card green">
+            <div class="icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="label">All Clear</div>
+            <div class="value">0</div>
+            <div class="note">No pending enrollment requests across your classes.</div>
+          </div>
+        </div>`;
+      panel.dataset.notificationsState=readyState;
+      return;
+    }
+
     panel.innerHTML='<div class="exact-page-head"><div class="exact-page-kicker">Notifications</div><h2>Pending Enrollment Requests</h2><p>Loading pending requests from all classes...</p></div>';
 
     const silentGet=async path=>{
@@ -405,7 +439,6 @@
       }
     };
 
-    const classes=classRows();
     const groups=[];
     let failed=0;
 
@@ -445,17 +478,21 @@
           : '<div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-circle-check"></i></div><div class="label">All Clear</div><div class="value">0</div><div class="note">No pending enrollment requests across your classes.</div></div>')}
       </div>`;
 
+    panel.dataset.notificationsState=readyState;
+
     panel.querySelectorAll('[data-exact-approve]').forEach(btn=>btn.addEventListener('click',async()=>{
       Teacher.state.classId=btn.dataset.exactClassId;
       await Teacher.approveStudent(btn.dataset.exactApprove);
       exactView='notifications';
-      renderExactView();
+      delete panel.dataset.notificationsState;
+      renderNotificationsPanel(panel,true);
     }));
     panel.querySelectorAll('[data-exact-reject]').forEach(btn=>btn.addEventListener('click',async()=>{
       Teacher.state.classId=btn.dataset.exactClassId;
       await Teacher.rejectStudent(btn.dataset.exactReject);
       exactView='notifications';
-      renderExactView();
+      delete panel.dataset.notificationsState;
+      renderNotificationsPanel(panel,true);
     }));
   }
 
