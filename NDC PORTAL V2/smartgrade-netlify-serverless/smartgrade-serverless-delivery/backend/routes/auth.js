@@ -253,6 +253,82 @@ router.put('/profile/student', authenticate, requireStudentRole, async (req, res
   } finally { client.release(); }
 });
 
+// ---------- TEACHER PROFILE UPDATE ----------
+router.put('/profile/teacher', authenticate, requireRole('teacher'), async (req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const {firstName,lastName,department,email}=req.body||{};
+    if(![firstName,lastName,email].every(v=>isNonEmptyString(String(v||'')))){
+      return res.status(400).json({error:'First name, last name, and email are required.'});
+    }
+    if(!isEmail(email)) return res.status(400).json({error:'Please enter a valid email address.'});
+
+    const normalizedEmail=String(email).trim().toLowerCase();
+    const normalizedFirst=String(firstName).trim();
+    const normalizedLast=String(lastName).trim();
+    const normalizedDepartment=String(department||'').trim();
+
+    await client.query('BEGIN');
+    const existingTeacher=(await client.query('SELECT * FROM teachers WHERE id=$1 FOR UPDATE',[req.user.id])).rows[0];
+    const existingUser=(await client.query('SELECT id,email FROM users WHERE id=$1 FOR UPDATE',[req.user.id])).rows[0];
+    if(!existingTeacher||!existingUser){
+      await client.query('ROLLBACK');
+      return res.status(404).json({error:'Teacher profile not found.'});
+    }
+
+    const emailOwner=(await client.query(
+      'SELECT id FROM users WHERE LOWER(BTRIM(email))=$1 AND id<>$2 LIMIT 1',
+      [normalizedEmail,req.user.id]
+    )).rows[0];
+    if(emailOwner){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:'This email is already registered to another account.'});
+    }
+
+    const updated=(await client.query(
+      `UPDATE teachers SET first_name=$1,last_name=$2,department=$3 WHERE id=$4 RETURNING *`,
+      [normalizedFirst,normalizedLast,normalizedDepartment||null,req.user.id]
+    )).rows[0];
+
+    await client.query(
+      'UPDATE users SET email=$1,updated_at=now() WHERE id=$2',
+      [normalizedEmail,req.user.id]
+    );
+
+    await client.query('COMMIT');
+
+    await audit(req,{
+      action:'teacher_profile_updated',
+      recordType:'teacher',
+      recordId:req.user.id,
+      previousValue:{
+        first_name:existingTeacher.first_name,
+        last_name:existingTeacher.last_name,
+        department:existingTeacher.department,
+        email:existingUser.email
+      },
+      newValue:{
+        first_name:updated.first_name,
+        last_name:updated.last_name,
+        department:updated.department,
+        email:normalizedEmail
+      }
+    });
+
+    res.json({
+      message:'Profile and email updated successfully.',
+      profile:updated,
+      email:normalizedEmail
+    });
+  }catch(e){
+    try{await client.query('ROLLBACK');}catch{}
+    if(e&&e.code==='23505') return res.status(409).json({error:'This email is already registered to another account.'});
+    next(e);
+  }finally{
+    client.release();
+  }
+});
+
 // ---------- EMAIL PASSWORD RESET ----------
 router.post('/forgot-password', async (req, res, next) => {
   try {
