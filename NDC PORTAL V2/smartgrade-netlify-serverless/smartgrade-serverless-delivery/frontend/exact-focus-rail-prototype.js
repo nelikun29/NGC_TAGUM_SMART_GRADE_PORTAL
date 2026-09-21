@@ -66,10 +66,9 @@
       border:0!important;border-radius:0!important;background:linear-gradient(180deg,var(--efr-navy) 0%,var(--efr-navy-deep) 100%)!important;
       box-shadow:none!important;z-index:48!important;overflow-y:auto!important;color:#fff!important
     }
-    .exact-brand{display:flex;align-items:center;gap:12px;min-height:112px;padding:18px 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
-    .exact-brand img{width:58px;height:58px;border-radius:50%;object-fit:contain;background:#fff;box-shadow:0 0 0 2px rgba(243,197,47,.85)}
-    .exact-brand strong{display:block;font-size:.70rem;line-height:1.22;color:#f3cf51;letter-spacing:.02em}
-    .exact-brand span{display:block;margin-top:5px;font-size:.64rem;line-height:1.25;color:#fff;font-weight:800}
+    .exact-brand{display:block;min-height:112px;padding:26px 22px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .exact-brand strong{display:block;font-size:1.02rem;line-height:1.2;color:#fff;letter-spacing:-.01em;font-weight:900}
+    .exact-brand span{display:block;margin-top:7px;font-size:.66rem;line-height:1.35;color:#b7c7da;font-weight:700}
     .exact-primary-nav{padding:8px 0 10px}
     .exact-primary-nav button{
       width:100%;min-height:52px;display:flex;align-items:center;gap:14px;padding:0 22px;border:0;border-left:5px solid transparent;
@@ -245,15 +244,8 @@
   function logoSrc(){return document.querySelector('.portal-header img')?.getAttribute('src') || './assets/logo.png'}
 
   function decorateHeader(){
-    const header=document.querySelector('.portal-header');
-    if(!header) return;
-    const brand=header.querySelector('.max-w-7xl > div > div:first-child');
-    if(!brand) return;
-    if(!brand.dataset.exactOriginalHtml) brand.dataset.exactOriginalHtml=brand.innerHTML;
-    if(brand.dataset.exactTeacherHeader==='1') return;
-    brand.dataset.exactTeacherHeader='1';
-    brand.removeAttribute('onclick');
-    brand.innerHTML='<div class="exact-teacher-heading"><h1>Teacher Workspace</h1><p>Teach &nbsp;•&nbsp; Track &nbsp;•&nbsp; Support &nbsp;•&nbsp; Empower</p></div>';
+    // Keep the portal's original NDC institutional branding in the global header.
+    restoreHeader();
   }
 
   function restoreHeader(){
@@ -268,17 +260,13 @@
   function railHtml(){
     const rows=classRows();
     const selected=selectedClass();
-    const pending=rows.reduce((n,c)=>n+Number(c.pending_count||0),0);
     return `
       <div class="exact-brand">
-        <img src="${logoSrc()}" alt="NDC Tagum Foundation, Inc.">
-        <div><strong>NDC TAGUM<br>FOUNDATION, INC.</strong><span>SMART GRADE &<br>ATTENDANCE PORTAL</span></div>
+        <strong>Teacher Workspace</strong>
+        <span>Teach &nbsp;•&nbsp; Track &nbsp;•&nbsp; Support &nbsp;•&nbsp; Empower</span>
       </div>
       <nav class="exact-primary-nav">
-        <button type="button" data-exact-nav="dashboard"><i class="fa-solid fa-house"></i><span>Dashboard</span></button>
         <button type="button" data-exact-nav="classes" class="active"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
-        <button type="button" data-exact-nav="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span>${pending?'<b class="badge">'+(pending>99?'99+':pending)+'</b>':''}</button>
-        <button type="button" data-exact-nav="profile"><i class="fa-solid fa-user"></i><span>Profile</span></button>
       </nav>
       <div class="exact-rail-divider"></div>
       <p class="exact-rail-label">My Classes</p>
@@ -306,10 +294,7 @@
     rail.innerHTML=railHtml();
     rail.querySelectorAll('[data-exact-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactClass)));
     rail.querySelector('.exact-create-class')?.addEventListener('click',()=>Teacher.showCreateClass());
-    rail.querySelector('[data-exact-nav="dashboard"]')?.addEventListener('click',()=>document.getElementById('teacher-section')?.scrollIntoView({behavior:'smooth',block:'start'}));
     rail.querySelector('[data-exact-nav="classes"]')?.addEventListener('click',()=>document.getElementById('teacher-selected-class-name')?.scrollIntoView({behavior:'smooth',block:'center'}));
-    rail.querySelector('[data-exact-nav="notifications"]')?.addEventListener('click',()=>Teacher.switchTab('approvals'));
-    rail.querySelector('[data-exact-nav="profile"]')?.addEventListener('click',()=>document.querySelector('.portal-header')?.scrollIntoView({behavior:'smooth',block:'start'}));
   }
 
   function markLegacyBlocks(section){
