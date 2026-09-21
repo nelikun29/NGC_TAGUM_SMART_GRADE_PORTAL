@@ -1,47 +1,139 @@
-const https = require('https');
+const tls = require('tls');
 
-function postJson(url, headers, body) {
+const SMTP_HOST = 'smtp.gmail.com';
+const SMTP_PORT = 465;
+
+function smtpSend({ user, password, to, subject, text, html }) {
   return new Promise((resolve, reject) => {
-    const target = new URL(url);
-    const payload = JSON.stringify(body);
-    const req = https.request({
-      protocol: target.protocol,
-      hostname: target.hostname,
-      port: target.port || 443,
-      path: target.pathname + target.search,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-        ...headers
-      }
-    }, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        let parsed = null;
-        try { parsed = data ? JSON.parse(data) : null; } catch {}
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(parsed || {});
-          return;
-        }
-        const message = parsed?.message || parsed?.error || data || ('HTTP ' + res.statusCode);
-        reject(new Error(message));
-      });
+    const socket = tls.connect({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      servername: SMTP_HOST,
+      rejectUnauthorized: true
     });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
+
+    let buffer = '';
+    let settled = false;
+    const waiters = [];
+
+    function finishError(err) {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch {}
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+
+    function finishOk(value) {
+      if (settled) return;
+      settled = true;
+      try { socket.end(); } catch {}
+      resolve(value);
+    }
+
+    function parseResponses() {
+      while (true) {
+        const match = buffer.match(/(?:^|\r\n)(\d{3})([ -])([^\r\n]*)\r\n/);
+        if (!match) return;
+
+        const code = Number(match[1]);
+        const separator = match[2];
+
+        if (separator === '-') {
+          const terminal = new RegExp('(?:^|\\r\\n)' + code + ' ([^\\r\\n]*)\\r\\n');
+          const terminalMatch = buffer.match(terminal);
+          if (!terminalMatch) return;
+          const endIndex = terminalMatch.index + terminalMatch[0].length;
+          const response = buffer.slice(0, endIndex).trim();
+          buffer = buffer.slice(endIndex);
+          if (waiters.length) waiters.shift()({ code, response });
+          continue;
+        }
+
+        const endIndex = match.index + match[0].length;
+        const response = buffer.slice(0, endIndex).trim();
+        buffer = buffer.slice(endIndex);
+        if (waiters.length) waiters.shift()({ code, response });
+      }
+    }
+
+    socket.setEncoding('utf8');
+    socket.setTimeout(15000);
+    socket.on('timeout', () => finishError(new Error('Gmail SMTP connection timed out.')));
+    socket.on('error', finishError);
+    socket.on('data', chunk => {
+      buffer += chunk;
+      parseResponses();
+    });
+
+    function nextResponse() {
+      return new Promise(resolveResponse => waiters.push(resolveResponse));
+    }
+
+    async function command(line, expectedCodes) {
+      socket.write(line + '\r\n');
+      const { code, response } = await nextResponse();
+      if (!expectedCodes.includes(code)) {
+        throw new Error('Gmail SMTP error ' + code + ': ' + response);
+      }
+      return response;
+    }
+
+    socket.once('secureConnect', async () => {
+      try {
+        let response = await nextResponse();
+        if (response.code !== 220) throw new Error('Gmail SMTP greeting failed: ' + response.response);
+
+        await command('EHLO smartgradeportal', [250]);
+        await command('AUTH LOGIN', [334]);
+        await command(Buffer.from(user).toString('base64'), [334]);
+        await command(Buffer.from(password).toString('base64'), [235]);
+        await command('MAIL FROM:<' + user + '>', [250]);
+        await command('RCPT TO:<' + to + '>', [250, 251]);
+        await command('DATA', [354]);
+
+        const boundary = 'smartgrade_' + Date.now().toString(36);
+        const message = [
+          'From: NDC Smart Grade <' + user + '>',
+          'To: <' + to + '>',
+          'Subject: ' + subject,
+          'MIME-Version: 1.0',
+          'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+          '',
+          '--' + boundary,
+          'Content-Type: text/plain; charset=UTF-8',
+          'Content-Transfer-Encoding: 8bit',
+          '',
+          text,
+          '',
+          '--' + boundary,
+          'Content-Type: text/html; charset=UTF-8',
+          'Content-Transfer-Encoding: 8bit',
+          '',
+          html,
+          '',
+          '--' + boundary + '--',
+          ''
+        ].join('\r\n').replace(/^\./gm, '..');
+
+        socket.write(message + '\r\n.\r\n');
+        response = await nextResponse();
+        if (response.code !== 250) throw new Error('Gmail SMTP send failed: ' + response.response);
+
+        socket.write('QUIT\r\n');
+        finishOk({ provider: 'gmail', accepted: [to] });
+      } catch (err) {
+        finishError(err);
+      }
+    });
   });
 }
 
 async function sendPasswordResetEmail({ to, resetUrl }) {
-  const apiKey = String(process.env.RESEND_API_KEY || '').trim();
-  const from = String(process.env.PASSWORD_RESET_FROM_EMAIL || '').trim();
+  const user = String(process.env.EMAIL_USER || '').trim();
+  const password = String(process.env.EMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 
-  if (!apiKey || !from) {
-    throw new Error('Password reset email is not configured. Set RESEND_API_KEY and PASSWORD_RESET_FROM_EMAIL.');
+  if (!user || !password) {
+    throw new Error('Password reset email is not configured. Set EMAIL_USER and EMAIL_APP_PASSWORD.');
   }
 
   const subject = 'Reset your NDC Smart Grade password';
@@ -57,11 +149,7 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
     </div>`;
   const text = `Reset your NDC Smart Grade password using this link: ${resetUrl}\n\nThis link expires in 30 minutes and can only be used once.\nIf you did not request this reset, ignore this email.`;
 
-  return postJson(
-    'https://api.resend.com/emails',
-    { Authorization: 'Bearer ' + apiKey },
-    { from, to: [to], subject, html, text }
-  );
+  return smtpSend({ user, password, to, subject, text, html });
 }
 
 module.exports = { sendPasswordResetEmail };
