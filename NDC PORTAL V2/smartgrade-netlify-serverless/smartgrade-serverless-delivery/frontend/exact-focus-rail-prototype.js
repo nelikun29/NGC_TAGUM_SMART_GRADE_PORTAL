@@ -459,6 +459,54 @@
     }));
   }
 
+  function openTeacherProfileEditor(){
+    const p=Store?.user?.profile||{};
+    const host=document.createElement('div');
+    host.id='teacher-edit-profile-modal';
+    host.className='fixed inset-0 z-[170] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4';
+    host.innerHTML=`
+      <div class="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b px-5 py-4">
+          <div>
+            <h3 class="text-lg font-black text-slate-800"><i class="fa-solid fa-user-pen mr-2 text-blue-600"></i>Edit Teacher Profile</h3>
+            <p class="mt-1 text-xs text-slate-500">Update your basic information and the active email used for password recovery.</p>
+          </div>
+          <button type="button" data-close-teacher-profile class="h-9 w-9 rounded-xl text-slate-500 hover:bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="teacher-profile-form" class="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+          <label class="text-xs font-bold text-slate-600">First Name<input id="teacher-profile-first" required value="${esc(p.first_name||'')}" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600">Last Name<input id="teacher-profile-last" required value="${esc(p.last_name||'')}" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600 sm:col-span-2">Department<input id="teacher-profile-department" value="${esc(p.department||'')}" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600 sm:col-span-2">Email Address<input id="teacher-profile-email" type="email" required value="${esc(Store?.user?.email||'')}" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><span class="mt-1 block text-[10px] font-medium text-slate-400">Use an active email. Forgot Password reset links will be sent here.</span></label>
+          <div class="flex justify-end gap-2 pt-2 sm:col-span-2">
+            <button type="button" data-close-teacher-profile class="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600">Cancel</button>
+            <button type="submit" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Changes</button>
+          </div>
+        </form>
+      </div>`;
+    document.body.appendChild(host);
+    host.querySelectorAll('[data-close-teacher-profile]').forEach(btn=>btn.addEventListener('click',()=>host.remove()));
+    host.querySelector('#teacher-profile-form')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      try{
+        const data=await api('PUT','/auth/profile/teacher',{
+          firstName:document.getElementById('teacher-profile-first')?.value||'',
+          lastName:document.getElementById('teacher-profile-last')?.value||'',
+          department:document.getElementById('teacher-profile-department')?.value||'',
+          email:document.getElementById('teacher-profile-email')?.value||''
+        });
+        const current=Store.user||{};
+        Store.user={...current,email:data.email||current.email,profile:data.profile||current.profile};
+        host.remove();
+        Toast.show('Profile Updated',data.message||'Teacher profile updated successfully.','success');
+        exactView='profile';
+        renderExactView();
+        const name=document.getElementById('user-name-display');
+        if(name) name.textContent=data.profile?[data.profile.first_name,data.profile.last_name].filter(Boolean).join(' '):(data.email||current.email||'');
+      }catch{}
+    });
+  }
+
   function renderExactView(){
     const panel=ensureViewPanel();
     const section=document.getElementById('teacher-section');
@@ -480,6 +528,7 @@
           <div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-clock"></i></div><div class="label">Overall Pending Requests</div><div class="value">${s.pending}</div><div class="note">Enrollment requests awaiting action</div></div>
         </div>`;
     } else if(exactView==='profile'){
+      const tp=Store?.user?.profile||{};
       panel.innerHTML=`
         <div class="exact-page-head">
           <div class="exact-page-kicker">Profile</div>
@@ -490,7 +539,24 @@
           <div class="exact-mini-card"><strong>${s.classes}</strong><span>Classes</span></div>
           <div class="exact-mini-card"><strong>${s.students}</strong><span>Enrolled Students</span></div>
           <div class="exact-mini-card"><strong>${s.pending}</strong><span>Pending Requests</span></div>
+        </div>
+        <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 class="text-base font-black text-slate-800">Teacher Profile</h3>
+              <p class="mt-1 text-xs text-slate-500">Keep your email active because password-reset links are sent to this address.</p>
+              <div class="mt-4 grid gap-2 text-sm text-slate-700">
+                <div><b>Name:</b> ${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</div>
+                <div><b>Department:</b> ${esc(tp.department||'—')}</div>
+                <div><b>Email:</b> ${esc(Store?.user?.email||'—')}</div>
+              </div>
+            </div>
+            <button type="button" id="exact-edit-teacher-profile" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+              <i class="fa-solid fa-user-pen mr-2"></i>Edit Profile
+            </button>
+          </div>
         </div>`;
+      panel.querySelector('#exact-edit-teacher-profile')?.addEventListener('click',openTeacherProfileEditor);
     } else if(exactView==='notifications'){
       renderNotificationsPanel(panel);
     } else {
