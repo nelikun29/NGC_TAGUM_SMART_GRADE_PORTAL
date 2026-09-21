@@ -585,7 +585,7 @@
           <button type="button" class="exact-class-item ${String(c.id)===String(selected?.id)?'selected':''}" data-exact-class="${String(c.id).replace(/"/g,'&quot;')}">
             <strong>${String(c.subject||'Untitled Subject').replace(/</g,'&lt;')}</strong>
             <small>
-              <span>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.class_code?' &nbsp;•&nbsp; Class Code: '+String(c.class_code).replace(/</g,'&lt;'):''}</span>
+              <span>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.room_number?' &nbsp;•&nbsp; Room: '+String(c.room_number).replace(/</g,'&lt;'):''}${c.class_code?' &nbsp;•&nbsp; Class Code: '+String(c.class_code).replace(/</g,'&lt;'):''}</span>
             </small>
           </button>
         `).join('')}
@@ -599,7 +599,7 @@
     const rail=section.querySelector('#'+RAIL_ID);
     if(!rail) return;
     rail.classList.add('exact-focus-rail');
-    const sig=JSON.stringify(classRows().map(c=>[c.id,c.subject,c.year_level,c.section,c.student_count,c.pending_count]).concat([[selectedClass()?.id||null]]));
+    const sig=JSON.stringify(classRows().map(c=>[c.id,c.subject,c.year_level,c.section,c.room_number,c.class_code,c.student_count,c.pending_count]).concat([[selectedClass()?.id||null]]));
     if(rail.dataset.exactSignature===sig) return;
     rail.dataset.exactSignature=sig;
     rail.innerHTML=railHtml();
@@ -631,8 +631,9 @@
     const c=selectedClass();
     if(!meta || !c) return;
     const parts=[c.year_level,c.section].filter(Boolean);
+    const roomText=c.room_number ? 'Room: '+c.room_number : '';
     const codeText=c.class_code ? 'Class Code: '+c.class_code : '';
-    const visible=[...parts,codeText].filter(Boolean).join(' • ');
+    const visible=[...parts,roomText,codeText].filter(Boolean).join(' • ');
     const sig=[c.id,visible].join('|');
     if(meta.dataset.exactCodeSig===sig) return;
     meta.dataset.exactCodeSig=sig;
