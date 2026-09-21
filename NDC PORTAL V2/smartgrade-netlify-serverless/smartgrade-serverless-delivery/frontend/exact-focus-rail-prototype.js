@@ -374,18 +374,43 @@
 
   async function renderNotificationsPanel(panel){
     panel.innerHTML='<div class="exact-page-head"><div class="exact-page-kicker">Notifications</div><h2>Pending Enrollment Requests</h2><p>Loading pending requests from all classes...</p></div>';
+
+    const silentGet=async path=>{
+      try{
+        const headers={'Content-Type':'application/json'};
+        if(Store?.token) headers.Authorization='Bearer '+Store.token;
+        const res=await fetch(API_BASE+path,{method:'GET',headers});
+        if(!res.ok) return {ok:false,rows:[]};
+        const data=await res.json().catch(()=>[]);
+        return {ok:true,rows:Array.isArray(data)?data:[]};
+      }catch{
+        return {ok:false,rows:[]};
+      }
+    };
+
     const classes=classRows();
-    const groups=await Promise.all(classes.map(async cls=>{
-      const rows=await api('GET','/classes/'+cls.id+'/pending-enrollments').catch(()=>[]);
-      return {cls,rows:Array.isArray(rows)?rows:[]};
-    }));
+    const groups=[];
+    let failed=0;
+
+    // Load sequentially to avoid a burst of simultaneous requests/toasts.
+    for(const cls of classes){
+      const result=await silentGet('/classes/'+cls.id+'/pending-enrollments');
+      if(!result.ok) failed++;
+      groups.push({cls,rows:result.rows});
+    }
+
     const all=groups.flatMap(g=>g.rows.map(r=>({cls:g.cls,row:r})));
+    const unavailable=failed>0
+      ? '<div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-2"></i>'+failed+' class'+(failed===1?'':'es')+' could not be checked right now. No repeated error notifications will be shown; refresh this page to try again.</div>'
+      : '';
+
     panel.innerHTML=`
       <div class="exact-page-head">
         <div class="exact-page-kicker">Notifications</div>
         <h2>Pending Enrollment Requests</h2>
         <p>${all.length} pending request${all.length===1?'':'s'} across all subjects you created.</p>
       </div>
+      ${unavailable}
       <div class="exact-notification-list">
         ${all.length?all.map(item=>`
           <article class="exact-notification-card">
@@ -398,8 +423,11 @@
               <button type="button" class="exact-reject" data-exact-reject="${esc(item.row.id)}" data-exact-class-id="${esc(item.cls.id)}">Reject</button>
             </div>
           </article>
-        `).join(''):'<div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-circle-check"></i></div><div class="label">All Clear</div><div class="value">0</div><div class="note">No pending enrollment requests across your classes.</div></div>'}
+        `).join(''):(failed===classes.length && classes.length
+          ? '<div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-wifi"></i></div><div class="label">Temporarily Unavailable</div><div class="value">—</div><div class="note">Pending requests could not be loaded. Please try again shortly.</div></div>'
+          : '<div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-circle-check"></i></div><div class="label">All Clear</div><div class="value">0</div><div class="note">No pending enrollment requests across your classes.</div></div>')}
       </div>`;
+
     panel.querySelectorAll('[data-exact-approve]').forEach(btn=>btn.addEventListener('click',async()=>{
       Teacher.state.classId=btn.dataset.exactClassId;
       await Teacher.approveStudent(btn.dataset.exactApprove);
