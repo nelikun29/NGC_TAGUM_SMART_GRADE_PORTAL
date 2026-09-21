@@ -6,6 +6,7 @@ const { pool } = require('../db');
 const { JWT_SECRET, authenticate, requireRole } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
 const { isNonEmptyString, isEmail } = require('../utils/validate');
+const { sendPasswordResetEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -201,50 +202,232 @@ router.post('/register/teacher', async (req, res, next) => {
 router.put('/profile/student', authenticate, requireStudentRole, async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { firstName, middleName, lastName, yearLevel, roomNumber } = req.body || {};
-    if (![firstName, lastName, yearLevel].every(v => isNonEmptyString(String(v || '')))) {
-      return res.status(400).json({ error: 'First name, last name, and year level are required.' });
+    const { firstName, middleName, lastName, yearLevel, roomNumber, email } = req.body || {};
+    if (![firstName, lastName, yearLevel, email].every(v => isNonEmptyString(String(v || '')))) {
+      return res.status(400).json({ error: 'First name, last name, year level, and email are required.' });
     }
+    if (!isEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+
     const normalizedFirst=String(firstName).trim(),normalizedMiddle=String(middleName||'').trim(),normalizedLast=String(lastName).trim();
+    const normalizedEmail=String(email).trim().toLowerCase();
+
     await client.query('BEGIN');
     const existing = (await client.query('SELECT * FROM students WHERE id = $1 FOR UPDATE', [req.user.id])).rows[0];
-    if (!existing) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Student profile not found.' }); }
+    const existingUser = (await client.query('SELECT id,email FROM users WHERE id=$1 FOR UPDATE', [req.user.id])).rows[0];
+    if (!existing || !existingUser) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Student profile not found.' }); }
+
+    const emailOwner=(await client.query('SELECT id FROM users WHERE LOWER(BTRIM(email))=$1 AND id<>$2 LIMIT 1',[normalizedEmail,req.user.id])).rows[0];
+    if(emailOwner){ await client.query('ROLLBACK'); return res.status(409).json({ error:'This email is already registered to another account.' }); }
+
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[[normalizedFirst,normalizedMiddle,normalizedLast].join('|').toLowerCase()]);
     const duplicateName=(await client.query(`SELECT id FROM students WHERE id<>$1 AND LOWER(BTRIM(first_name))=LOWER($2) AND LOWER(BTRIM(COALESCE(middle_name,'')))=LOWER($3) AND LOWER(BTRIM(last_name))=LOWER($4) LIMIT 1`,[req.user.id,normalizedFirst,normalizedMiddle,normalizedLast])).rows[0]||null;
     const updated = (await client.query(
       `UPDATE students SET first_name=$1,middle_name=$2,last_name=$3,year_level=$4,room_number=$5 WHERE id=$6 RETURNING *`,
       [normalizedFirst, normalizedMiddle || null, normalizedLast, String(yearLevel).trim(), String(roomNumber || '').trim() || null, req.user.id]
     )).rows[0];
+
+    await client.query('UPDATE users SET email=$1,updated_at=now() WHERE id=$2',[normalizedEmail,req.user.id]);
+
     if(duplicateName){
       await client.query(`UPDATE users SET account_verification_status='possible_duplicate',verification_note='Exact full-name match requires administrator review.',updated_at=now() WHERE id=$1`,[req.user.id]);
       await client.query(`INSERT INTO student_duplicate_reviews(id,candidate_user_id,matched_user_id,status,match_reason) VALUES($1,$2,$3,'pending','profile_update_exact_full_name') ON CONFLICT DO NOTHING`,[crypto.randomUUID(),req.user.id,duplicateName.id]);
     }
+
     await client.query('COMMIT');
     await audit(req, { action:'student_profile_updated', recordType:'student', recordId:req.user.id,
-      previousValue:{first_name:existing.first_name,middle_name:existing.middle_name,last_name:existing.last_name,year_level:existing.year_level,room_number:existing.room_number},
-      newValue:{first_name:updated.first_name,middle_name:updated.middle_name,last_name:updated.last_name,year_level:updated.year_level,room_number:updated.room_number} });
+      previousValue:{first_name:existing.first_name,middle_name:existing.middle_name,last_name:existing.last_name,year_level:existing.year_level,room_number:existing.room_number,email:existingUser.email},
+      newValue:{first_name:updated.first_name,middle_name:updated.middle_name,last_name:updated.last_name,year_level:updated.year_level,room_number:updated.room_number,email:normalizedEmail} });
+
     const nextVerificationStatus=duplicateName?'possible_duplicate':(req.user.accountVerificationStatus||'verified');
     res.json({
-      message:nextVerificationStatus!=='verified'?'Profile updated. Academic access remains restricted until the account review is completed.':'Profile updated successfully.',
+      message:nextVerificationStatus!=='verified'?'Profile updated. Academic access remains restricted until the account review is completed.':'Profile and email updated successfully.',
       profile:updated,
+      email:normalizedEmail,
       accountVerificationStatus:nextVerificationStatus,
       verificationNote:duplicateName?'Exact full-name match requires administrator review.':(req.user.verificationNote||null)
     });
-  } catch (e) { try{await client.query('ROLLBACK');}catch{} next(e); } finally { client.release(); }
+  } catch (e) {
+    try{await client.query('ROLLBACK');}catch{}
+    if(e&&e.code==='23505') return res.status(409).json({error:'This email is already registered to another account.'});
+    next(e);
+  } finally { client.release(); }
 });
 
-// ---------- ADMIN-ASSISTED PASSWORD RESET ----------
+// ---------- TEACHER PROFILE UPDATE ----------
+router.put('/profile/teacher', authenticate, requireRole('teacher'), async (req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const {firstName,lastName,department,email}=req.body||{};
+    if(![firstName,lastName,email].every(v=>isNonEmptyString(String(v||'')))){
+      return res.status(400).json({error:'First name, last name, and email are required.'});
+    }
+    if(!isEmail(email)) return res.status(400).json({error:'Please enter a valid email address.'});
+
+    const normalizedEmail=String(email).trim().toLowerCase();
+    const normalizedFirst=String(firstName).trim();
+    const normalizedLast=String(lastName).trim();
+    const normalizedDepartment=String(department||'').trim();
+
+    await client.query('BEGIN');
+    const existingTeacher=(await client.query('SELECT * FROM teachers WHERE id=$1 FOR UPDATE',[req.user.id])).rows[0];
+    const existingUser=(await client.query('SELECT id,email FROM users WHERE id=$1 FOR UPDATE',[req.user.id])).rows[0];
+    if(!existingTeacher||!existingUser){
+      await client.query('ROLLBACK');
+      return res.status(404).json({error:'Teacher profile not found.'});
+    }
+
+    const emailOwner=(await client.query(
+      'SELECT id FROM users WHERE LOWER(BTRIM(email))=$1 AND id<>$2 LIMIT 1',
+      [normalizedEmail,req.user.id]
+    )).rows[0];
+    if(emailOwner){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:'This email is already registered to another account.'});
+    }
+
+    const updated=(await client.query(
+      `UPDATE teachers SET first_name=$1,last_name=$2,department=$3 WHERE id=$4 RETURNING *`,
+      [normalizedFirst,normalizedLast,normalizedDepartment||null,req.user.id]
+    )).rows[0];
+
+    await client.query(
+      'UPDATE users SET email=$1,updated_at=now() WHERE id=$2',
+      [normalizedEmail,req.user.id]
+    );
+
+    await client.query('COMMIT');
+
+    await audit(req,{
+      action:'teacher_profile_updated',
+      recordType:'teacher',
+      recordId:req.user.id,
+      previousValue:{
+        first_name:existingTeacher.first_name,
+        last_name:existingTeacher.last_name,
+        department:existingTeacher.department,
+        email:existingUser.email
+      },
+      newValue:{
+        first_name:updated.first_name,
+        last_name:updated.last_name,
+        department:updated.department,
+        email:normalizedEmail
+      }
+    });
+
+    res.json({
+      message:'Profile and email updated successfully.',
+      profile:updated,
+      email:normalizedEmail
+    });
+  }catch(e){
+    try{await client.query('ROLLBACK');}catch{}
+    if(e&&e.code==='23505') return res.status(409).json({error:'This email is already registered to another account.'});
+    next(e);
+  }finally{
+    client.release();
+  }
+});
+
+// ---------- EMAIL PASSWORD RESET ----------
 router.post('/forgot-password', async (req, res, next) => {
   try {
     const normalizedEmail = String((req.body || {}).email || '').trim().toLowerCase();
-    const generic = { message: 'If this email is registered, a password-reset request has been submitted for administrator review.' };
+    const generic = { message: 'If this email is registered and active, a password reset link will be sent to it.' };
     if (!isEmail(normalizedEmail)) return res.json(generic);
-    const user = (await pool.query('SELECT id FROM users WHERE lower(email)=$1', [normalizedEmail])).rows[0];
-    if (!user) return res.json(generic);
-    const existing = (await pool.query("SELECT id FROM password_reset_requests WHERE user_id=$1 AND status='pending'", [user.id])).rows[0];
-    if (!existing) await pool.query("INSERT INTO password_reset_requests(id,user_id,status) VALUES($1,$2,'pending')", [crypto.randomUUID(), user.id]);
+
+    const user = (await pool.query('SELECT id,email,is_active FROM users WHERE lower(email)=$1', [normalizedEmail])).rows[0];
+    if (!user || !user.is_active) return res.json(generic);
+
+    const appBaseUrl=String(process.env.APP_BASE_URL||'').trim().replace(/\/$/,'');
+    if(!appBaseUrl){
+      console.error('[auth/forgot-password] APP_BASE_URL is not configured.');
+      return res.json(generic);
+    }
+
+    const rawToken=crypto.randomBytes(32).toString('hex');
+    const tokenHash=crypto.createHash('sha256').update(rawToken).digest('hex');
+    const requestId=crypto.randomUUID();
+
+    const existing=(await pool.query("SELECT id FROM password_reset_requests WHERE user_id=$1 AND status='pending'",[user.id])).rows[0];
+    if(existing){
+      await pool.query(
+        `UPDATE password_reset_requests
+         SET requested_at=now(),token_hash=$1,token_expires_at=now()+interval '30 minutes',email_sent_at=NULL
+         WHERE id=$2`,
+        [tokenHash,existing.id]
+      );
+    }else{
+      await pool.query(
+        `INSERT INTO password_reset_requests(id,user_id,status,token_hash,token_expires_at)
+         VALUES($1,$2,'pending',$3,now()+interval '30 minutes')`,
+        [requestId,user.id,tokenHash]
+      );
+    }
+
+    const resetUrl=appBaseUrl+'?resetToken='+encodeURIComponent(rawToken);
+    try{
+      await sendPasswordResetEmail({to:user.email,resetUrl});
+      await pool.query(
+        `UPDATE password_reset_requests SET email_sent_at=now()
+         WHERE user_id=$1 AND status='pending'`,
+        [user.id]
+      );
+    }catch(emailError){
+      console.error('[auth/forgot-password] email send failed',emailError);
+    }
+
     res.json(generic);
   } catch (e) { next(e); }
+});
+
+router.post('/reset-password', async (req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const token=String((req.body||{}).token||'').trim();
+    const newPassword=String((req.body||{}).newPassword||'');
+    const confirmPassword=String((req.body||{}).confirmPassword||'');
+
+    if(!token) return res.status(400).json({error:'Reset token is required.'});
+    if(newPassword.length<8) return res.status(400).json({error:'Password must be at least 8 characters.'});
+    if(newPassword!==confirmPassword) return res.status(400).json({error:'Passwords do not match.'});
+
+    const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+
+    await client.query('BEGIN');
+    const request=(await client.query(
+      `SELECT * FROM password_reset_requests
+       WHERE token_hash=$1 AND status='pending' AND token_expires_at>now()
+       FOR UPDATE`,
+      [tokenHash]
+    )).rows[0];
+
+    if(!request){
+      await client.query('ROLLBACK');
+      return res.status(400).json({error:'This password reset link is invalid or has expired.'});
+    }
+
+    const hash=bcrypt.hashSync(newPassword,12);
+    await client.query(
+      'UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$2',
+      [hash,request.user_id]
+    );
+    await client.query(
+      `UPDATE password_reset_requests
+       SET status='completed',resolved_at=now(),token_hash=NULL,token_expires_at=NULL
+       WHERE id=$1`,
+      [request.id]
+    );
+    await client.query('COMMIT');
+
+    try{await audit(req,{action:'password_reset_email',recordType:'user',recordId:request.user_id,newValue:{reset:true,loginLockCleared:true}});}catch(e){console.error('[auth/reset-password] audit failed',e);}
+    res.json({message:'Password updated successfully. You may now log in with your new password.'});
+  }catch(e){
+    try{await client.query('ROLLBACK');}catch{}
+    next(e);
+  }finally{
+    client.release();
+  }
 });
 
 router.get('/password-reset-requests', authenticate, requireRole('admin'), async (req, res, next) => {
