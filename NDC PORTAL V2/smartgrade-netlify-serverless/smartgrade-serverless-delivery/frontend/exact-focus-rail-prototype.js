@@ -102,6 +102,58 @@
     .exact-rail-footer{margin-top:38px;padding:22px;border-top:1px solid rgba(255,255,255,.08);color:#9eb0c6;font-size:.60rem;line-height:1.45}
     .exact-rail-footer strong{display:block;color:#c8d5e4;font-size:.64rem;margin-bottom:2px}
 
+    .exact-view-panel{
+      display:none;
+      margin:4px 0 22px;
+    }
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="dashboard"] .exact-view-panel,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-view-panel,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="profile"] .exact-view-panel{display:block}
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="dashboard"] .exact-class-workspace,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-class-workspace,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="profile"] .exact-class-workspace{display:none!important}
+
+    .exact-page-head{margin:6px 0 22px}
+    .exact-page-kicker{font-size:.64rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8a9aab}
+    .exact-page-head h2{margin:5px 0 0;color:var(--efr-ink);font-size:1.8rem;line-height:1.14;font-weight:900;letter-spacing:-.035em}
+    .exact-page-head p{margin:7px 0 0;color:var(--efr-muted);font-size:.76rem;line-height:1.55}
+
+    .exact-big-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+    .exact-big-card{
+      min-height:174px;padding:24px;border:1px solid var(--efr-line);border-radius:16px;background:#fff;
+      box-shadow:0 12px 28px rgba(23,59,103,.055)
+    }
+    .exact-big-card .icon{
+      width:48px;height:48px;display:grid;place-items:center;border-radius:13px;background:#edf4ff;color:var(--efr-blue);font-size:1.12rem
+    }
+    .exact-big-card.gold .icon{background:#fff5cf;color:#9a6b08}
+    .exact-big-card.green .icon{background:#e9f7f0;color:#168457}
+    .exact-big-card .label{margin-top:19px;color:#718298;font-size:.66rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+    .exact-big-card .value{margin-top:5px;color:var(--efr-ink);font-size:2.1rem;font-weight:900;letter-spacing:-.04em}
+    .exact-big-card .note{margin-top:4px;color:#8a99aa;font-size:.64rem}
+
+    .exact-mini-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+    .exact-mini-card{padding:16px 18px;border:1px solid var(--efr-line);border-radius:13px;background:#fff}
+    .exact-mini-card strong{display:block;color:var(--efr-ink);font-size:1.25rem;font-weight:900}
+    .exact-mini-card span{display:block;margin-top:3px;color:var(--efr-muted);font-size:.62rem}
+
+    .exact-notification-list{display:grid;gap:12px}
+    .exact-notification-card{
+      display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;padding:17px 18px;
+      border:1px solid var(--efr-line);border-radius:14px;background:#fff
+    }
+    .exact-notification-card h4{margin:0;color:var(--efr-ink);font-size:.78rem;font-weight:900}
+    .exact-notification-card p{margin:5px 0 0;color:var(--efr-muted);font-size:.65rem}
+    .exact-notification-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .exact-notification-actions button{min-height:36px;padding:0 12px;border-radius:9px;font-size:.64rem;font-weight:900}
+    .exact-approve{background:#168457!important;color:#fff!important}
+    .exact-reject{background:#fff!important;color:#c43d45!important;border:1px solid #efc9cc!important}
+
+    @media(max-width:820px){
+      .exact-big-stats,.exact-mini-stats{grid-template-columns:1fr}
+      .exact-notification-card{grid-template-columns:1fr}
+    }
+
     .exact-breadcrumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 14px;color:#8795a6;font-size:.66rem;font-weight:600}
     .exact-breadcrumbs i{font-size:.52rem;color:#a5b1bd}
 
@@ -257,6 +309,150 @@
     delete brand.dataset.exactTeacherHeader;
   }
 
+  let exactView='classes';
+
+  function totals(){
+    const rows=classRows();
+    return {
+      classes:rows.length,
+      students:rows.reduce((n,c)=>n+Number(c.student_count||0),0),
+      pending:rows.reduce((n,c)=>n+Number(c.pending_count||0),0)
+    };
+  }
+
+  function teacherDisplayName(){
+    const text=document.getElementById('user-name-display')?.textContent?.trim();
+    if(text) return text.toUpperCase();
+    const p=Store?.user?.profile;
+    const fallback=p?[p.first_name,p.last_name].filter(Boolean).join(' '):(Store?.user?.email||'TEACHER');
+    return String(fallback||'TEACHER').toUpperCase();
+  }
+
+  function setExactView(view){
+    exactView=view;
+    const section=document.getElementById('teacher-section');
+    if(section) section.dataset.exactView=view;
+    syncExactNav();
+    renderExactView();
+  }
+
+  function syncExactNav(){
+    document.querySelectorAll('#sg-focus-rail [data-exact-nav]').forEach(btn=>{
+      btn.classList.toggle('active',btn.dataset.exactNav===exactView);
+    });
+  }
+
+  function workspaceNodes(){
+    const section=document.getElementById('teacher-section');
+    if(!section) return [];
+    return [
+      section.querySelector('.exact-breadcrumbs'),
+      document.getElementById('teacher-selected-class-name')?.closest('.glass-card'),
+      section.querySelector('.sg-ref-tabs')?.parentElement || section.querySelector('.sg-ref-tabs'),
+      section.querySelector('.exact-summary-strip'),
+      document.getElementById('teacher-tab-content')
+    ].filter(Boolean);
+  }
+
+  function markWorkspace(){
+    workspaceNodes().forEach(n=>n.classList.add('exact-class-workspace'));
+  }
+
+  function ensureViewPanel(){
+    const section=document.getElementById('teacher-section');
+    const root=section?.querySelector(':scope > .space-y-6');
+    if(!root) return null;
+    let panel=root.querySelector('.exact-view-panel');
+    if(!panel){
+      panel=document.createElement('section');
+      panel.className='exact-view-panel';
+      const firstVisible=[...root.children].find(x=>!x.matches('#sg-focus-mobile-nav,#sg-focus-rail,.fr-workspace-masthead,.fr-summary-grid,[data-exact-hide="true"]'));
+      if(firstVisible) firstVisible.before(panel); else root.prepend(panel);
+    }
+    return panel;
+  }
+
+  async function renderNotificationsPanel(panel){
+    panel.innerHTML='<div class="exact-page-head"><div class="exact-page-kicker">Notifications</div><h2>Pending Enrollment Requests</h2><p>Loading pending requests from all classes...</p></div>';
+    const classes=classRows();
+    const groups=await Promise.all(classes.map(async cls=>{
+      const rows=await api('GET','/classes/'+cls.id+'/pending-enrollments').catch(()=>[]);
+      return {cls,rows:Array.isArray(rows)?rows:[]};
+    }));
+    const all=groups.flatMap(g=>g.rows.map(r=>({cls:g.cls,row:r})));
+    panel.innerHTML=`
+      <div class="exact-page-head">
+        <div class="exact-page-kicker">Notifications</div>
+        <h2>Pending Enrollment Requests</h2>
+        <p>${all.length} pending request${all.length===1?'':'s'} across all subjects you created.</p>
+      </div>
+      <div class="exact-notification-list">
+        ${all.length?all.map(item=>`
+          <article class="exact-notification-card">
+            <div>
+              <h4>${esc((item.row.first_name||'')+' '+(item.row.last_name||''))}</h4>
+              <p>${esc(item.row.email||'')} &nbsp;•&nbsp; ${esc(item.cls.subject||'Class')} ${item.cls.section?'— '+esc(item.cls.section):''}</p>
+            </div>
+            <div class="exact-notification-actions">
+              <button type="button" class="exact-approve" data-exact-approve="${esc(item.row.id)}" data-exact-class-id="${esc(item.cls.id)}">Approve</button>
+              <button type="button" class="exact-reject" data-exact-reject="${esc(item.row.id)}" data-exact-class-id="${esc(item.cls.id)}">Reject</button>
+            </div>
+          </article>
+        `).join(''):'<div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-circle-check"></i></div><div class="label">All Clear</div><div class="value">0</div><div class="note">No pending enrollment requests across your classes.</div></div>'}
+      </div>`;
+    panel.querySelectorAll('[data-exact-approve]').forEach(btn=>btn.addEventListener('click',async()=>{
+      Teacher.state.classId=btn.dataset.exactClassId;
+      await Teacher.approveStudent(btn.dataset.exactApprove);
+      exactView='notifications';
+      renderExactView();
+    }));
+    panel.querySelectorAll('[data-exact-reject]').forEach(btn=>btn.addEventListener('click',async()=>{
+      Teacher.state.classId=btn.dataset.exactClassId;
+      await Teacher.rejectStudent(btn.dataset.exactReject);
+      exactView='notifications';
+      renderExactView();
+    }));
+  }
+
+  function renderExactView(){
+    const panel=ensureViewPanel();
+    const section=document.getElementById('teacher-section');
+    if(!panel||!section) return;
+    section.dataset.exactView=exactView;
+    markWorkspace();
+    const s=totals();
+
+    if(exactView==='dashboard'){
+      panel.innerHTML=`
+        <div class="exact-page-head">
+          <div class="exact-page-kicker">Teacher Dashboard</div>
+          <h2>Overall Teaching Overview</h2>
+          <p>A consolidated view of your active classes, enrolled learners, and pending enrollment requests.</p>
+        </div>
+        <div class="exact-big-stats">
+          <div class="exact-big-card"><div class="icon"><i class="fa-solid fa-book-open"></i></div><div class="label">Number of Classes</div><div class="value">${s.classes}</div><div class="note">Classes created under your account</div></div>
+          <div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-users"></i></div><div class="label">Enrolled Students</div><div class="value">${s.students}</div><div class="note">Total enrollment across your classes</div></div>
+          <div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-clock"></i></div><div class="label">Overall Pending Requests</div><div class="value">${s.pending}</div><div class="note">Enrollment requests awaiting action</div></div>
+        </div>`;
+    } else if(exactView==='profile'){
+      panel.innerHTML=`
+        <div class="exact-page-head">
+          <div class="exact-page-kicker">Profile</div>
+          <h2>Welcome ${esc(teacherDisplayName())} to your Dashboard</h2>
+          <p>Your account overview and a compact snapshot of your teaching workload.</p>
+        </div>
+        <div class="exact-mini-stats">
+          <div class="exact-mini-card"><strong>${s.classes}</strong><span>Classes</span></div>
+          <div class="exact-mini-card"><strong>${s.students}</strong><span>Enrolled Students</span></div>
+          <div class="exact-mini-card"><strong>${s.pending}</strong><span>Pending Requests</span></div>
+        </div>`;
+    } else if(exactView==='notifications'){
+      renderNotificationsPanel(panel);
+    } else {
+      panel.innerHTML='';
+    }
+  }
+
   function railHtml(){
     const rows=classRows();
     const selected=selectedClass();
@@ -266,7 +462,10 @@
         <span>Teach &nbsp;•&nbsp; Track &nbsp;•&nbsp; Support &nbsp;•&nbsp; Empower</span>
       </div>
       <nav class="exact-primary-nav">
+        <button type="button" data-exact-nav="profile"><i class="fa-solid fa-user"></i><span>Profile</span></button>
+        <button type="button" data-exact-nav="dashboard"><i class="fa-solid fa-house"></i><span>Dashboard</span></button>
         <button type="button" data-exact-nav="classes" class="active"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
+        <button type="button" data-exact-nav="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span>${totals().pending?'<b class="badge">'+(totals().pending>99?'99+':totals().pending)+'</b>':''}</button>
       </nav>
       <div class="exact-rail-divider"></div>
       <p class="exact-rail-label">My Classes</p>
@@ -294,7 +493,17 @@
     rail.innerHTML=railHtml();
     rail.querySelectorAll('[data-exact-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactClass)));
     rail.querySelector('.exact-create-class')?.addEventListener('click',()=>Teacher.showCreateClass());
-    rail.querySelector('[data-exact-nav="classes"]')?.addEventListener('click',()=>document.getElementById('teacher-selected-class-name')?.scrollIntoView({behavior:'smooth',block:'center'}));
+    rail.querySelectorAll('[data-exact-nav]').forEach(btn=>btn.addEventListener('click',()=>{
+      const view=btn.dataset.exactNav;
+      if(view==='classes'){
+        exactView='classes';
+        setExactView('classes');
+        document.getElementById('teacher-selected-class-name')?.scrollIntoView({behavior:'smooth',block:'center'});
+      } else {
+        setExactView(view);
+      }
+    }));
+    syncExactNav();
   }
 
   function markLegacyBlocks(section){
@@ -386,6 +595,9 @@
     ensureBreadcrumbs(section);
     ensureSummary();
     decorateGradebookExact();
+    markWorkspace();
+    renderExactView();
+    syncExactNav();
   }
 
   let queued=false;
