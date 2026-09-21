@@ -309,7 +309,7 @@
     delete brand.dataset.exactTeacherHeader;
   }
 
-  let exactView='classes';
+  let exactView='profile';
 
   function totals(){
     const rows=classRows();
