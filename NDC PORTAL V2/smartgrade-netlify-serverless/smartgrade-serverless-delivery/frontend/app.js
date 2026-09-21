@@ -1615,7 +1615,9 @@ const Student = {
 
           </h3>
 
-          ${gradesHtml}
+          <div class="student-class-card-grid">
+            ${gradesHtml}
+          </div>
 
         </div>
 
