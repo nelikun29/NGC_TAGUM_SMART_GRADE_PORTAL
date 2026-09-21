@@ -1644,6 +1644,7 @@ const Student = {
           <label class="text-xs font-bold text-slate-600">Middle Name<input id="student-profile-middle" value="${esc(p.middle_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
           <label class="text-xs font-bold text-slate-600">Last Name<input id="student-profile-last" required value="${esc(p.last_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
           <label class="text-xs font-bold text-slate-600">Year Level<input id="student-profile-year" required value="${esc(p.year_level || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600 sm:col-span-2">Email Address<input id="student-profile-email" type="email" required value="${esc(Store.user?.email || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"><span class="block mt-1 text-[10px] font-medium text-slate-400">Use an active email address. This is where password-reset links will be sent.</span></label>
           <label class="text-xs font-bold text-slate-600 sm:col-span-2">Room<input id="student-profile-room" value="${esc(p.room_number || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
           <div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" onclick="Student.closeEditProfile()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold">Cancel</button><button type="submit" class="px-4 py-2 rounded-xl bg-eduBlue-600 text-white text-sm font-bold"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Changes</button></div>
         </form>
@@ -1663,13 +1664,15 @@ const Student = {
         middleName: val('student-profile-middle'),
         lastName: val('student-profile-last'),
         yearLevel: val('student-profile-year'),
-        roomNumber: val('student-profile-room')
+        roomNumber: val('student-profile-room'),
+        email: val('student-profile-email')
       });
       // Store.user is a localStorage-backed getter. Mutating the returned
       // object does not persist it, so write the complete user object back.
       const currentUser = Store.user || {};
       Store.user = {
         ...currentUser,
+        email: data.email || currentUser.email,
         profile: data.profile,
         accountVerificationStatus: data.accountVerificationStatus || currentUser.accountVerificationStatus || 'verified',
         verificationNote: data.verificationNote || null
