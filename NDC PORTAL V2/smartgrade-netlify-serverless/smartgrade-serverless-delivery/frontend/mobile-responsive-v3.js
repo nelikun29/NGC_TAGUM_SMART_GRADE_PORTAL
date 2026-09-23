@@ -31,7 +31,7 @@
 
         #ndc-teacher-mobile-nav{
           position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:120;
-          display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+          display:grid;grid-template-columns:repeat(3,1fr);gap:4px;
           padding:7px;border:1px solid rgba(255,255,255,.65);border-radius:18px;
           background:rgba(9,38,76,.94);backdrop-filter:blur(18px) saturate(135%);
           -webkit-backdrop-filter:blur(18px) saturate(135%);
@@ -219,8 +219,7 @@
       nav.id=NAV_ID;
       nav.setAttribute('aria-label','Teacher mobile navigation');
       nav.innerHTML=`
-        <button type="button" data-mobile-view="profile"><i class="fa-solid fa-user"></i><span>Profile</span></button>
-        <button type="button" data-mobile-view="dashboard"><i class="fa-solid fa-house"></i><span>Dashboard</span></button>
+        <button type="button" data-mobile-view="overview"><i class="fa-solid fa-house-user"></i><span>Overview</span></button>
         <button type="button" data-mobile-view="classes"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
         <button type="button" data-mobile-view="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span><b class="mobile-badge" style="display:none">0</b></button>
       `;
