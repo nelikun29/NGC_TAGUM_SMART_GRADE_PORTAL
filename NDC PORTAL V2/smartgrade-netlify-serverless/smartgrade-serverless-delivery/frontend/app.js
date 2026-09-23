@@ -169,7 +169,7 @@ const Toast = {
       c.id = 'toast-container';
 
       c.className =
-        'fixed top-5 right-5 z-[9999] space-y-3 max-w-sm';
+        'fixed bottom-5 right-5 z-[9999] flex flex-col-reverse gap-3 max-w-sm';
 
       document.body.appendChild(c);
     }
