@@ -181,10 +181,20 @@
       filter:saturate(1.05)
     }
     .exact-strip-card.selected{
-      border-color:color-mix(in srgb,var(--card-accent) 72%,white);
-      box-shadow:0 18px 36px rgba(15,23,42,.14),0 0 0 3px color-mix(in srgb,var(--card-accent) 22%,transparent);
-      transform:translateY(-2px)
+      border-color:color-mix(in srgb,var(--card-accent) 82%,white);
+      box-shadow:0 20px 40px rgba(15,23,42,.16),0 0 0 4px color-mix(in srgb,var(--card-accent) 28%,transparent);
+      transform:translateY(-3px) scale(1.01)
     }
+    .exact-strip-card.selected::before{height:6px}
+    .exact-selected-badge{
+      position:absolute;top:11px;right:10px;z-index:4;display:inline-flex;align-items:center;gap:5px;
+      min-height:24px;padding:0 8px;border-radius:999px;
+      background:linear-gradient(135deg,var(--card-accent),var(--card-accent-2));
+      color:#fff;font-size:.56rem;font-weight:950;letter-spacing:.02em;
+      box-shadow:0 6px 14px color-mix(in srgb,var(--card-accent) 24%,transparent)
+    }
+    .exact-selected-badge i{font-size:.58rem}
+    .exact-strip-card.selected .exact-strip-open{padding-top:42px}
     .exact-strip-open{
       position:relative;z-index:1;display:block;width:100%;padding:17px 14px 42px;border:0;background:transparent!important;text-align:left;color:var(--efr-ink)!important
     }
@@ -784,6 +794,7 @@
       <div class="exact-class-strip-track">
         ${rows.length ? rows.map(c=>`
           <article class="exact-strip-card ${String(c.id)===String(selected?.id)?'selected':''}" data-class-id="${esc(c.id)}">
+            ${String(c.id)===String(selected?.id)?'<div class="exact-selected-badge"><i class="fa-solid fa-circle-check"></i> Currently Selected</div>':''}
             <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
               <strong>${esc(c.subject||'Untitled Subject')}</strong>
               <span>${esc(c.year_level||'—')} • ${esc(c.section||'—')}</span>
