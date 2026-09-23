@@ -134,6 +134,13 @@
     .exact-class-strip-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
     .exact-class-strip-head>div{display:flex;align-items:center;gap:10px}
     .exact-class-strip-head strong{color:var(--efr-ink);font-size:.74rem}
+    .exact-class-strip-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+    .exact-class-quick{display:flex;align-items:center;gap:7px}
+    .exact-class-quick label{font-size:.62rem;font-weight:900;color:#475569;white-space:nowrap}
+    .exact-class-quick select{
+      min-width:250px;height:40px;padding:0 34px 0 11px;border:1px solid #d6dee8;border-radius:10px;background:#fff;
+      color:var(--efr-ink);font-size:.66rem;font-weight:800;box-shadow:0 5px 14px rgba(15,23,42,.05)
+    }
     .exact-strip-create{
       min-height:40px;padding:0 15px;border:1px solid rgba(255,255,255,.30);border-radius:10px;
       background:linear-gradient(135deg,#2563eb,#1d4ed8)!important;color:#fff!important;
@@ -210,14 +217,16 @@
     }
     .exact-strip-open span,.exact-strip-open small{display:block;margin-top:5px;color:#66778c;font-size:.63rem;line-height:1.35;font-weight:650}
     .exact-strip-open small{color:color-mix(in srgb,var(--card-accent) 78%,#334155);font-weight:800}
-    .exact-strip-edit{
-      position:absolute;left:11px;bottom:9px;z-index:3;min-height:27px;padding:0 9px;border:1px solid color-mix(in srgb,var(--card-accent) 26%,#d6dee8);border-radius:8px;
+    .exact-strip-edit,.exact-strip-copy{
+      position:absolute;bottom:9px;z-index:3;min-height:27px;padding:0 9px;border:1px solid color-mix(in srgb,var(--card-accent) 26%,#d6dee8);border-radius:8px;
       background:rgba(255,255,255,.82)!important;color:var(--card-accent)!important;font-size:.60rem;font-weight:900;
       box-shadow:0 4px 10px rgba(15,23,42,.06);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
       transition:transform .16s ease,background .16s ease,box-shadow .16s ease
     }
-    .exact-strip-edit:hover{transform:translateY(-1px);background:#fff!important;box-shadow:0 7px 14px rgba(15,23,42,.10)}
-    .exact-strip-edit i{margin-right:4px}
+    .exact-strip-edit{left:11px}
+    .exact-strip-copy{left:68px}
+    .exact-strip-edit:hover,.exact-strip-copy:hover{transform:translateY(-1px);background:#fff!important;box-shadow:0 7px 14px rgba(15,23,42,.10)}
+    .exact-strip-edit i,.exact-strip-copy i{margin-right:4px}
     .exact-strip-empty{padding:16px;border:1px dashed #cbd5e1;border-radius:10px;color:#718298;font-size:.68rem}
     .exact-rail-footer{margin-top:38px;padding:22px;border-top:1px solid rgba(255,255,255,.08);color:#9eb0c6;font-size:.60rem;line-height:1.45}
     .exact-rail-footer strong{display:block;color:#c8d5e4;font-size:.64rem;margin-bottom:2px}
@@ -278,7 +287,7 @@
     .exact-breadcrumbs i{font-size:.52rem;color:#a5b1bd}
 
     #teacher-section.sg-exact-focus-prototype .sg-ref-selected{
-      margin:0!important;padding:0 0 14px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important
+      display:none!important
     }
     #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div{
       display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:24px!important;align-items:center!important
@@ -780,10 +789,22 @@
           <span class="exact-page-kicker">My Classes</span>
           <strong>${rows.length} class${rows.length===1?'':'es'}</strong>
         </div>
-        <button type="button" class="exact-strip-create">
-          <i class="fa-solid fa-plus"></i>
-          Create Class
-        </button>
+        <div class="exact-class-strip-actions">
+          <div class="exact-class-quick">
+            <label for="exact-class-quick-select">Quick Select</label>
+            <select id="exact-class-quick-select" aria-label="Quick Select Class">
+              ${rows.map(c=>`
+                <option value="${esc(c.id)}" ${String(c.id)===String(selected?.id)?'selected':''}>
+                  ${esc(c.subject||'Untitled Subject')} — ${esc(c.section||'—')}
+                </option>
+              `).join('')}
+            </select>
+          </div>
+          <button type="button" class="exact-strip-create">
+            <i class="fa-solid fa-plus"></i>
+            Create Class
+          </button>
+        </div>
       </div>
       <div class="exact-class-strip-track">
         ${rows.length ? rows.map(c=>`
@@ -799,16 +820,27 @@
               <i class="fa-solid fa-pen-to-square"></i>
               Edit
             </button>
+            ${c.class_code ? `
+              <button type="button" class="exact-strip-copy" data-exact-strip-copy="${esc(c.id)}" data-class-code="${esc(c.class_code)}" title="Copy class code">
+                <i class="fa-regular fa-copy"></i>
+                Copy
+              </button>
+            ` : ''}
           </article>
         `).join('') : '<div class="exact-strip-empty">No classes yet. Create your first class to begin.</div>'}
       </div>
     `;
 
     strip.querySelector('.exact-strip-create')?.addEventListener('click',()=>Teacher.showCreateClass());
+    strip.querySelector('#exact-class-quick-select')?.addEventListener('change',e=>Teacher.selectClass(e.target.value));
     strip.querySelectorAll('[data-exact-strip-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactStripClass)));
     strip.querySelectorAll('[data-exact-strip-edit]').forEach(btn=>btn.addEventListener('click',e=>{
       e.stopPropagation();
       Teacher.editClass(btn.dataset.exactStripEdit);
+    }));
+    strip.querySelectorAll('[data-exact-strip-copy]').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      Teacher.copyClassCode(btn.dataset.classCode);
     }));
   }
 
