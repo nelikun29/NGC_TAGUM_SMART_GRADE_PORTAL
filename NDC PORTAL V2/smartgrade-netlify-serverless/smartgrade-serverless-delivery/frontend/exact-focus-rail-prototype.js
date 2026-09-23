@@ -128,6 +128,9 @@
       margin:0 0 16px;padding:14px 16px 16px;border:1px solid var(--efr-line);border-radius:14px;background:#fff;
       box-shadow:0 8px 24px rgba(23,59,103,.045)
     }
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="classes"] .exact-class-strip{
+      display:block!important
+    }
     .exact-class-strip-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
     .exact-class-strip-head>div{display:flex;align-items:center;gap:10px}
     .exact-class-strip-head strong{color:var(--efr-ink);font-size:.74rem}
@@ -684,6 +687,11 @@
   function markLegacyBlocks(section){
     const root=section.querySelector(':scope > .space-y-6');
     if(!root) return;
+
+    // Never allow Phase 2 components to inherit a stale legacy-hide marker.
+    root.querySelectorAll('.exact-view-panel,.exact-class-strip,.exact-breadcrumbs,.exact-summary-strip')
+      .forEach(el=>el.removeAttribute('data-exact-hide'));
+
     const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID+',.exact-view-panel,.exact-class-strip,.exact-breadcrumbs,.exact-summary-strip'));
     if(children[0]) children[0].dataset.exactHide='true';
     if(children[1]) children[1].dataset.exactHide='true';
@@ -691,14 +699,22 @@
 
   function ensureClassStrip(section){
     const selectedCard=document.getElementById('teacher-selected-class-name')?.closest('.glass-card');
-    if(!selectedCard) return;
+    const tabsCard=section.querySelector('.sg-ref-tabs')?.closest('.glass-card') || section.querySelector('.sg-ref-tabs')?.parentElement;
+    if(!selectedCard && !tabsCard) return;
 
     let strip=section.querySelector('.exact-class-strip');
     if(!strip){
       strip=document.createElement('section');
       strip.className='exact-class-strip exact-class-workspace';
-      selectedCard.after(strip);
+      if(selectedCard){
+        selectedCard.insertAdjacentElement('afterend',strip);
+      }else if(tabsCard){
+        tabsCard.insertAdjacentElement('beforebegin',strip);
+      }
     }
+
+    strip.removeAttribute('data-exact-hide');
+    if(exactView==='classes') strip.style.setProperty('display','block','important');
 
     const rows=classRows();
     const selected=selectedClass();
