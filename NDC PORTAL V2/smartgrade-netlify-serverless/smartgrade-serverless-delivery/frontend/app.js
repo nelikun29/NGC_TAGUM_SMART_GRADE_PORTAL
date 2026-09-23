@@ -6002,6 +6002,28 @@ ${esc(
         `/classes/${Teacher.state.classId}/roster`
       ).catch(() => []);
 
+    const scoreEndpoint =
+      kind === 'quizzes'
+        ? `/assessments/quizzes/${itemId}/scores`
+        : kind === 'performance'
+          ? `/assessments/performance-tasks/${itemId}/scores`
+          : `/assessments/exams/${itemId}/scores`;
+
+    const scoreData =
+      await api(
+        'GET',
+        scoreEndpoint
+      ).catch(() => ({ maxScore: null, scores: [] }));
+
+    const maxScore =
+      scoreData?.maxScore ?? null;
+
+    const savedScores =
+      new Map(
+        (Array.isArray(scoreData?.scores) ? scoreData.scores : [])
+          .map(row => [String(row.student_id), row.raw_score])
+      );
+
 
     box.innerHTML = `
 
@@ -6051,7 +6073,17 @@ ${esc(
               Array.isArray(roster)
                 ? roster
                     .map(
-                      s => `
+                      s => {
+                        const existingScore =
+                          savedScores.has(String(s.id))
+                            ? savedScores.get(String(s.id))
+                            : null;
+
+                        const hasSaved =
+                          existingScore !== null &&
+                          existingScore !== undefined;
+
+                        return `
 
                         <div
                           class="flex
@@ -6091,7 +6123,10 @@ ${esc(
                               id="score-${esc(itemId)}-${esc(s.id)}"
                               type="number"
                               step="any"
-                              placeholder="Score"
+                              ${maxScore !== null ? `min="0" max="${esc(maxScore)}"` : ''}
+                              value="${hasSaved ? esc(existingScore) : ''}"
+                              placeholder="${maxScore !== null ? '0 - ' + esc(maxScore) : 'Score'}"
+                              oninput="Teacher.markScoreDirty('${esc(itemId)}', '${esc(s.id)}')"
                               class="w-28
                                      px-2
                                      py-2
@@ -6100,10 +6135,16 @@ ${esc(
                                      border-slate-300"
                             >
 
+                            ${maxScore !== null
+                              ? `<span class="self-center text-sm font-bold text-slate-500">/ ${esc(maxScore)}</span>`
+                              : ''}
+
 
                             <button
+                              id="score-save-${esc(itemId)}-${esc(s.id)}"
+                              data-saved-value="${hasSaved ? esc(existingScore) : ''}"
                               onclick="Teacher.saveScore('${kind}', '${esc(itemId)}', '${esc(s.id)}')"
-                              class="bg-eduBlue-600
+                              class="${hasSaved ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-eduBlue-600 hover:bg-eduBlue-700'}
                                      text-white
                                      px-3
                                      py-2
@@ -6112,7 +6153,7 @@ ${esc(
                                      font-bold"
                             >
 
-                              Save
+                              ${hasSaved ? 'Saved' : 'Save'}
 
                             </button>
 
@@ -6120,7 +6161,8 @@ ${esc(
 
                         </div>
 
-                      `
+                      `;
+                      }
                     )
                     .join('')
                 : ''
@@ -6133,6 +6175,56 @@ ${esc(
       </div>
 
     `;
+
+  },
+
+
+  markScoreDirty(
+    itemId,
+    studentId
+  ) {
+
+    const input =
+      document.getElementById(
+        `score-${itemId}-${studentId}`
+      );
+
+    const button =
+      document.getElementById(
+        `score-save-${itemId}-${studentId}`
+      );
+
+    if (!input || !button) return;
+
+    const saved =
+      button.dataset.savedValue;
+
+    const unchanged =
+      saved !== '' &&
+      input.value !== '' &&
+      Number(saved) === Number(input.value);
+
+    button.textContent =
+      unchanged
+        ? 'Saved'
+        : 'Save';
+
+    button.classList.toggle(
+      'bg-emerald-600',
+      unchanged
+    );
+    button.classList.toggle(
+      'hover:bg-emerald-700',
+      unchanged
+    );
+    button.classList.toggle(
+      'bg-eduBlue-600',
+      !unchanged
+    );
+    button.classList.toggle(
+      'hover:bg-eduBlue-700',
+      !unchanged
+    );
 
   },
 
@@ -6191,6 +6283,20 @@ ${esc(
         }
       );
 
+
+      const button =
+        document.getElementById(
+          `score-save-${itemId}-${studentId}`
+        );
+
+      if (button) {
+        button.dataset.savedValue =
+          String(rawScore);
+        Teacher.markScoreDirty(
+          itemId,
+          studentId
+        );
+      }
 
       Toast.show(
         'Saved',
