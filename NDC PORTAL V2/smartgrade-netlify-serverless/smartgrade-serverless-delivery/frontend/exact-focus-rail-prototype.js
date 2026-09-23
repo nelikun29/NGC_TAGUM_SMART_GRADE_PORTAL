@@ -112,6 +112,13 @@
       color:var(--efr-blue)!important;font-size:.62rem!important;vertical-align:middle!important
     }
     .exact-selected-copy:hover{background:#eef4ff!important}
+    .exact-selected-edit{
+      display:inline-flex!important;align-items:center!important;justify-content:center!important;
+      min-width:28px!important;height:24px!important;padding:0 7px!important;margin-left:4px!important;
+      border:1px solid #cbd5e1!important;border-radius:7px!important;background:#fff!important;
+      color:var(--efr-blue)!important;font-size:.62rem!important;vertical-align:middle!important
+    }
+    .exact-selected-edit:hover{background:#eef4ff!important}
     .exact-create-class{
       width:calc(100% - 36px)!important;min-height:44px;margin:18px!important;border:1px solid #5d8bf0!important;border-radius:9px!important;
       background:var(--efr-blue)!important;color:#fff!important;font-size:.78rem!important;font-weight:900!important
@@ -676,8 +683,10 @@
     meta.dataset.exactCodeSig=sig;
     meta.innerHTML='<span>'+esc(visible)+'</span>'+(c.class_code
       ? ' <button type="button" class="exact-selected-copy" title="Copy class code" aria-label="Copy class code"><i class="fa-regular fa-copy"></i></button>'
-      : '');
+      : '')+
+      ' <button type="button" class="exact-selected-edit" title="Edit class" aria-label="Edit class"><i class="fa-solid fa-pen-to-square"></i></button>';
     meta.querySelector('.exact-selected-copy')?.addEventListener('click',()=>Teacher.copyClassCode(c.class_code));
+    meta.querySelector('.exact-selected-edit')?.addEventListener('click',()=>Teacher.editClass(c.id));
   }
 
   function ensureBreadcrumbs(section){
