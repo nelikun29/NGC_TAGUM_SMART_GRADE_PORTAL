@@ -684,7 +684,7 @@
   function markLegacyBlocks(section){
     const root=section.querySelector(':scope > .space-y-6');
     if(!root) return;
-    const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID));
+    const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID+',.exact-view-panel,.exact-class-strip,.exact-breadcrumbs,.exact-summary-strip'));
     if(children[0]) children[0].dataset.exactHide='true';
     if(children[1]) children[1].dataset.exactHide='true';
   }
