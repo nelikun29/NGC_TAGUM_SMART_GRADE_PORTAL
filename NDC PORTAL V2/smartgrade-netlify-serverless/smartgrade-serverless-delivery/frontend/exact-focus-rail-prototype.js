@@ -123,6 +123,39 @@
       width:calc(100% - 36px)!important;min-height:44px;margin:18px!important;border:1px solid #5d8bf0!important;border-radius:9px!important;
       background:var(--efr-blue)!important;color:#fff!important;font-size:.78rem!important;font-weight:900!important
     }
+
+    .exact-class-strip{
+      margin:0 0 16px;padding:14px 16px 16px;border:1px solid var(--efr-line);border-radius:14px;background:#fff;
+      box-shadow:0 8px 24px rgba(23,59,103,.045)
+    }
+    .exact-class-strip-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+    .exact-class-strip-head>div{display:flex;align-items:center;gap:10px}
+    .exact-class-strip-head strong{color:var(--efr-ink);font-size:.74rem}
+    .exact-strip-create{
+      min-height:38px;padding:0 13px;border:0;border-radius:9px;background:var(--efr-blue)!important;color:#fff!important;
+      font-size:.68rem;font-weight:900
+    }
+    .exact-strip-create i{margin-right:6px}
+    .exact-class-strip-track{
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px
+    }
+    .exact-strip-card{
+      position:relative;min-width:0;border:1px solid #dbe3ec;border-radius:12px;background:#f8fafc;overflow:hidden;
+      transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease
+    }
+    .exact-strip-card:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(23,59,103,.09)}
+    .exact-strip-card.selected{border-color:var(--efr-gold);box-shadow:0 0 0 2px rgba(245,191,33,.16)}
+    .exact-strip-open{
+      display:block;width:100%;padding:13px 13px 38px;border:0;background:transparent!important;text-align:left;color:var(--efr-ink)!important
+    }
+    .exact-strip-open strong{display:block;font-size:.75rem;line-height:1.3;font-weight:900}
+    .exact-strip-open span,.exact-strip-open small{display:block;margin-top:4px;color:#718298;font-size:.62rem;line-height:1.35}
+    .exact-strip-edit{
+      position:absolute;left:10px;bottom:8px;min-height:24px;padding:0 8px;border:1px solid #d6dee8;border-radius:7px;
+      background:#fff!important;color:var(--efr-blue)!important;font-size:.59rem;font-weight:900
+    }
+    .exact-strip-edit i{margin-right:4px}
+    .exact-strip-empty{padding:16px;border:1px dashed #cbd5e1;border-radius:10px;color:#718298;font-size:.68rem}
     .exact-rail-footer{margin-top:38px;padding:22px;border-top:1px solid rgba(255,255,255,.08);color:#9eb0c6;font-size:.60rem;line-height:1.45}
     .exact-rail-footer strong{display:block;color:#c8d5e4;font-size:.64rem;margin-bottom:2px}
 
@@ -176,6 +209,8 @@
     @media(max-width:820px){
       .exact-big-stats,.exact-mini-stats{grid-template-columns:1fr}
       .exact-notification-card{grid-template-columns:1fr}
+      .exact-class-strip-track{display:flex;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:4px}
+      .exact-strip-card{flex:0 0 220px;scroll-snap-align:start}
     }
 
     .exact-breadcrumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 14px;color:#8795a6;font-size:.66rem;font-weight:600}
@@ -376,6 +411,7 @@
     return [
       section.querySelector('.exact-breadcrumbs'),
       document.getElementById('teacher-selected-class-name')?.closest('.glass-card'),
+      section.querySelector('.exact-class-strip'),
       section.querySelector('.sg-ref-tabs')?.parentElement || section.querySelector('.sg-ref-tabs'),
       section.querySelector('.exact-summary-strip'),
       document.getElementById('teacher-tab-content')
@@ -609,8 +645,6 @@
   }
 
   function railHtml(){
-    const rows=classRows();
-    const selected=selectedClass();
     return `
       <div class="exact-brand">
         <strong>Teacher Workspace</strong>
@@ -622,19 +656,6 @@
         <button type="button" data-exact-nav="classes" class="active"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
         <button type="button" data-exact-nav="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span>${totals().pending?'<b class="badge">'+(totals().pending>99?'99+':totals().pending)+'</b>':''}</button>
       </nav>
-      <div class="exact-rail-divider"></div>
-      <p class="exact-rail-label">My Classes</p>
-      <div class="exact-class-list">
-        ${rows.map(c=>`
-          <button type="button" class="exact-class-item ${String(c.id)===String(selected?.id)?'selected':''}" data-exact-class="${String(c.id).replace(/"/g,'&quot;')}">
-            <strong>${String(c.subject||'Untitled Subject').replace(/</g,'&lt;')}</strong>
-            <small>
-              <span>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.room_number?' &nbsp;•&nbsp; Room: '+String(c.room_number).replace(/</g,'&lt;'):''}${c.class_code?' &nbsp;•&nbsp; Class Code: '+String(c.class_code).replace(/</g,'&lt;'):''}</span>
-            </small>
-          </button>
-        `).join('')}
-      </div>
-      <button type="button" class="exact-create-class"><i class="fa-solid fa-plus mr-2"></i>Create Class</button>
       <div class="exact-rail-footer"><strong>NDC Tagum Foundation, Inc.</strong>Smart Grade & Attendance Portal</div>
     `;
   }
@@ -647,8 +668,6 @@
     if(rail.dataset.exactSignature===sig) return;
     rail.dataset.exactSignature=sig;
     rail.innerHTML=railHtml();
-    rail.querySelectorAll('[data-exact-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactClass)));
-    rail.querySelector('.exact-create-class')?.addEventListener('click',()=>Teacher.showCreateClass());
     rail.querySelectorAll('[data-exact-nav]').forEach(btn=>btn.addEventListener('click',()=>{
       const view=btn.dataset.exactNav;
       if(view==='classes'){
@@ -669,6 +688,65 @@
     if(children[0]) children[0].dataset.exactHide='true';
     if(children[1]) children[1].dataset.exactHide='true';
   }
+
+  function ensureClassStrip(section){
+    const selectedCard=document.getElementById('teacher-selected-class-name')?.closest('.glass-card');
+    if(!selectedCard) return;
+
+    let strip=section.querySelector('.exact-class-strip');
+    if(!strip){
+      strip=document.createElement('section');
+      strip.className='exact-class-strip exact-class-workspace';
+      selectedCard.after(strip);
+    }
+
+    const rows=classRows();
+    const selected=selectedClass();
+    const sig=JSON.stringify(rows.map(c=>[
+      c.id,c.subject,c.year_level,c.section,c.room_number,c.class_code,
+      String(c.id)===String(selected?.id)
+    ]));
+
+    if(strip.dataset.sig===sig) return;
+    strip.dataset.sig=sig;
+
+    strip.innerHTML=`
+      <div class="exact-class-strip-head">
+        <div>
+          <span class="exact-page-kicker">My Classes</span>
+          <strong>${rows.length} class${rows.length===1?'':'es'}</strong>
+        </div>
+        <button type="button" class="exact-strip-create">
+          <i class="fa-solid fa-plus"></i>
+          Create Class
+        </button>
+      </div>
+      <div class="exact-class-strip-track">
+        ${rows.length ? rows.map(c=>`
+          <article class="exact-strip-card ${String(c.id)===String(selected?.id)?'selected':''}" data-class-id="${esc(c.id)}">
+            <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
+              <strong>${esc(c.subject||'Untitled Subject')}</strong>
+              <span>${esc(c.year_level||'—')} • ${esc(c.section||'—')}</span>
+              <span>Room: ${esc(c.room_number||'—')}</span>
+              <small>Class Code: ${esc(c.class_code||'—')}</small>
+            </button>
+            <button type="button" class="exact-strip-edit" data-exact-strip-edit="${esc(c.id)}" title="Edit class">
+              <i class="fa-solid fa-pen-to-square"></i>
+              Edit
+            </button>
+          </article>
+        `).join('') : '<div class="exact-strip-empty">No classes yet. Create your first class to begin.</div>'}
+      </div>
+    `;
+
+    strip.querySelector('.exact-strip-create')?.addEventListener('click',()=>Teacher.showCreateClass());
+    strip.querySelectorAll('[data-exact-strip-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactStripClass)));
+    strip.querySelectorAll('[data-exact-strip-edit]').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      Teacher.editClass(btn.dataset.exactStripEdit);
+    }));
+  }
+
 
   function ensureSelectedClassCode(){
     const meta=document.getElementById('teacher-selected-class-meta');
@@ -768,6 +846,7 @@
     rebuildRail(section);
     markLegacyBlocks(section);
     ensureSelectedClassCode();
+    ensureClassStrip(section);
     ensureBreadcrumbs(section);
     ensureSummary();
     decorateGradebookExact();
