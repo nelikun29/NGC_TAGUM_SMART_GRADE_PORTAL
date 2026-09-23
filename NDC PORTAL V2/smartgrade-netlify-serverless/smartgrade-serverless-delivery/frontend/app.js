@@ -128,11 +128,20 @@ async function api(method, path, body) {
       (data && data.error) ||
       'An unexpected error occurred.';
 
-    Toast.show(
-      'Error',
-      message,
-      'error'
-    );
+    const sessionEnded =
+      !Store.token ||
+      !Store.user;
+
+    if (
+      !sessionEnded ||
+      (res.status !== 401 && res.status !== 403)
+    ) {
+      Toast.show(
+        'Error',
+        message,
+        'error'
+      );
+    }
 
     throw new Error(message);
   }
@@ -160,7 +169,7 @@ const Toast = {
       c.id = 'toast-container';
 
       c.className =
-        'fixed top-5 right-5 z-[9999] space-y-3 max-w-sm';
+        'fixed bottom-5 right-5 z-[9999] flex flex-col-reverse gap-3 max-w-sm';
 
       document.body.appendChild(c);
     }
@@ -814,6 +823,27 @@ const ApprovalManager = {
 
 
   // ----------------------------------------------------------
+  // STOP AUTOMATIC REFRESH
+  // ----------------------------------------------------------
+
+  stopAutoRefresh() {
+
+    if (this.state.timer) {
+      clearInterval(this.state.timer);
+      this.state.timer = null;
+    }
+
+    this.state.loading = false;
+    this.state.adminPending = 0;
+    this.state.teacherPending = 0;
+    this.state.unfinalizePending = 0;
+    this.updateBadge(0);
+    this.updateTitle(0);
+
+  },
+
+
+  // ----------------------------------------------------------
   // FORCE REFRESH
   // ----------------------------------------------------------
 
@@ -869,6 +899,8 @@ const Auth = {
 
       Store.user =
         data.user;
+
+      ApprovalManager.startAutoRefresh();
 
 
       Toast.show(
@@ -1019,21 +1051,28 @@ const Auth = {
 
   logout() {
 
+    ApprovalManager.stopAutoRefresh();
+
+    if (Teacher?._attendanceQrTimer) {
+      clearInterval(Teacher._attendanceQrTimer);
+      Teacher._attendanceQrTimer = null;
+    }
+
     api(
       'POST',
       '/auth/logout'
     ).catch(() => {});
 
-
     Store.token = null;
-
     Store.user = null;
 
-
-    ApprovalManager.refresh();
-
-
     Views.renderForRole();
+
+    Toast.show(
+      'Logged Out',
+      'You have been logged out successfully.',
+      'success'
+    );
 
   }
 
@@ -5965,6 +6004,28 @@ ${esc(
         `/classes/${Teacher.state.classId}/roster`
       ).catch(() => []);
 
+    const scoreEndpoint =
+      kind === 'quizzes'
+        ? `/assessments/quizzes/${itemId}/scores`
+        : kind === 'performance'
+          ? `/assessments/performance-tasks/${itemId}/scores`
+          : `/assessments/exams/${itemId}/scores`;
+
+    const scoreData =
+      await api(
+        'GET',
+        scoreEndpoint
+      ).catch(() => ({ maxScore: null, scores: [] }));
+
+    const maxScore =
+      scoreData?.maxScore ?? null;
+
+    const savedScores =
+      new Map(
+        (Array.isArray(scoreData?.scores) ? scoreData.scores : [])
+          .map(row => [String(row.student_id), row.raw_score])
+      );
+
 
     box.innerHTML = `
 
@@ -6014,7 +6075,17 @@ ${esc(
               Array.isArray(roster)
                 ? roster
                     .map(
-                      s => `
+                      s => {
+                        const existingScore =
+                          savedScores.has(String(s.id))
+                            ? savedScores.get(String(s.id))
+                            : null;
+
+                        const hasSaved =
+                          existingScore !== null &&
+                          existingScore !== undefined;
+
+                        return `
 
                         <div
                           class="flex
@@ -6054,7 +6125,10 @@ ${esc(
                               id="score-${esc(itemId)}-${esc(s.id)}"
                               type="number"
                               step="any"
-                              placeholder="Score"
+                              ${maxScore !== null ? `min="0" max="${esc(maxScore)}"` : ''}
+                              value="${hasSaved ? esc(existingScore) : ''}"
+                              placeholder="${maxScore !== null ? '0 - ' + esc(maxScore) : 'Score'}"
+                              oninput="Teacher.markScoreDirty('${esc(itemId)}', '${esc(s.id)}')"
                               class="w-28
                                      px-2
                                      py-2
@@ -6063,10 +6137,16 @@ ${esc(
                                      border-slate-300"
                             >
 
+                            ${maxScore !== null
+                              ? `<span class="self-center text-sm font-bold text-slate-500">/ ${esc(maxScore)}</span>`
+                              : ''}
+
 
                             <button
+                              id="score-save-${esc(itemId)}-${esc(s.id)}"
+                              data-saved-value="${hasSaved ? esc(existingScore) : ''}"
                               onclick="Teacher.saveScore('${kind}', '${esc(itemId)}', '${esc(s.id)}')"
-                              class="bg-eduBlue-600
+                              class="${hasSaved ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-eduBlue-600 hover:bg-eduBlue-700'}
                                      text-white
                                      px-3
                                      py-2
@@ -6075,7 +6155,7 @@ ${esc(
                                      font-bold"
                             >
 
-                              Save
+                              ${hasSaved ? 'Saved' : 'Save'}
 
                             </button>
 
@@ -6083,7 +6163,8 @@ ${esc(
 
                         </div>
 
-                      `
+                      `;
+                      }
                     )
                     .join('')
                 : ''
@@ -6096,6 +6177,56 @@ ${esc(
       </div>
 
     `;
+
+  },
+
+
+  markScoreDirty(
+    itemId,
+    studentId
+  ) {
+
+    const input =
+      document.getElementById(
+        `score-${itemId}-${studentId}`
+      );
+
+    const button =
+      document.getElementById(
+        `score-save-${itemId}-${studentId}`
+      );
+
+    if (!input || !button) return;
+
+    const saved =
+      button.dataset.savedValue;
+
+    const unchanged =
+      saved !== '' &&
+      input.value !== '' &&
+      Number(saved) === Number(input.value);
+
+    button.textContent =
+      unchanged
+        ? 'Saved'
+        : 'Save';
+
+    button.classList.toggle(
+      'bg-emerald-600',
+      unchanged
+    );
+    button.classList.toggle(
+      'hover:bg-emerald-700',
+      unchanged
+    );
+    button.classList.toggle(
+      'bg-eduBlue-600',
+      !unchanged
+    );
+    button.classList.toggle(
+      'hover:bg-eduBlue-700',
+      !unchanged
+    );
 
   },
 
@@ -6154,6 +6285,20 @@ ${esc(
         }
       );
 
+
+      const button =
+        document.getElementById(
+          `score-save-${itemId}-${studentId}`
+        );
+
+      if (button) {
+        button.dataset.savedValue =
+          String(rawScore);
+        Teacher.markScoreDirty(
+          itemId,
+          studentId
+        );
+      }
 
       Toast.show(
         'Saved',
@@ -7185,6 +7330,10 @@ const Admin = {
                     u.approval_status
                   )}
 
+                  ${u.locked_until
+                    ? '<span class="ml-1 text-amber-700 font-bold">· Locked</span>'
+                    : ''}
+
                 </td>
 
 
@@ -7197,6 +7346,12 @@ const Admin = {
                     >
                       Reset Password
                     </button>
+
+                    ${
+                      (u.locked_until || Number(u.failed_login_attempts || 0) > 0)
+                        ? `<button onclick="Admin.unlockAccount('${u.id}')" class="text-xs font-bold text-amber-700">Unlock Account</button>`
+                        : ''
+                    }
 
                     ${
                       u.is_active
@@ -7229,6 +7384,28 @@ const Admin = {
     document.body.appendChild(m);
     const close=()=>m.remove();m.querySelectorAll('[data-close]').forEach(x=>x.onclick=close);
     m.querySelector('form').onsubmit=async e=>{e.preventDefault();const p=e.target.password.value;const confirm=e.target.confirm.value;if(p.length<8){Toast.show('Invalid Password','Password must be at least 8 characters.','error');return;}if(p!==confirm){Toast.show('Passwords Do Not Match','Please enter the same password twice.','error');return;}try{await api('POST',`/admin/users/${id}/reset-password`,{newPassword:p});Toast.show('Password Reset','Password updated and login lock cleared.','success');close();}catch{}};
+  },
+
+
+  async unlockAccount(id) {
+
+    try {
+
+      await api(
+        'POST',
+        `/admin/users/${id}/unlock`
+      );
+
+      Toast.show(
+        'Account Unlocked',
+        'Login restriction cleared. The existing password is unchanged.',
+        'success'
+      );
+
+      Admin.renderUsers();
+
+    } catch {}
+
   },
 
 

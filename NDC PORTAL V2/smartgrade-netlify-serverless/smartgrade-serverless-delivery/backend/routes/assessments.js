@@ -49,6 +49,19 @@ router.get('/quizzes', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get('/quizzes/:quizId/scores', requireRole('teacher', 'admin'), async (req, res, next) => {
+  try {
+    const quiz = (await pool.query(`SELECT * FROM quizzes WHERE id = $1`, [req.params.quizId])).rows[0];
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found.' });
+    if (req.user.role === 'teacher') {
+      const cls = (await pool.query(`SELECT teacher_id FROM classes WHERE id = $1`, [quiz.class_id])).rows[0];
+      if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+    }
+    const scores = (await pool.query(`SELECT student_id,raw_score,verification_status,is_locked,updated_at FROM quiz_scores WHERE quiz_id=$1`, [quiz.id])).rows;
+    res.json({ maxScore: quiz.total_items, scores });
+  } catch (e) { next(e); }
+});
+
 router.put('/quizzes/:quizId/scores/:studentId', requireRole('teacher', 'admin'), async (req, res, next) => {
   try {
     const quiz = (await pool.query(`SELECT * FROM quizzes WHERE id = $1`, [req.params.quizId])).rows[0];
@@ -162,6 +175,19 @@ router.get('/performance-tasks', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get('/performance-tasks/:taskId/scores', requireRole('teacher', 'admin'), async (req, res, next) => {
+  try {
+    const task = (await pool.query(`SELECT * FROM performance_tasks WHERE id = $1`, [req.params.taskId])).rows[0];
+    if (!task) return res.status(404).json({ error: 'Performance task not found.' });
+    if (req.user.role === 'teacher') {
+      const cls = (await pool.query(`SELECT teacher_id FROM classes WHERE id = $1`, [task.class_id])).rows[0];
+      if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+    }
+    const scores = (await pool.query(`SELECT student_id,raw_score,remarks,is_locked,updated_at FROM performance_scores WHERE task_id=$1`, [task.id])).rows;
+    res.json({ maxScore: task.max_score, scores });
+  } catch (e) { next(e); }
+});
+
 router.put('/performance-tasks/:taskId/scores/:studentId', requireRole('teacher', 'admin'), async (req, res, next) => {
   try {
     const task = (await pool.query(`SELECT * FROM performance_tasks WHERE id = $1`, [req.params.taskId])).rows[0];
@@ -228,6 +254,19 @@ router.get('/exams', async (req, res, next) => {
     const { classId } = req.query;
     if (!classId) return res.status(400).json({ error: 'classId is required.' });
     res.json((await pool.query(`SELECT * FROM examinations WHERE class_id = $1 ORDER BY exam_date DESC`, [classId])).rows);
+  } catch (e) { next(e); }
+});
+
+router.get('/exams/:examId/scores', requireRole('teacher', 'admin'), async (req, res, next) => {
+  try {
+    const exam = (await pool.query(`SELECT * FROM examinations WHERE id = $1`, [req.params.examId])).rows[0];
+    if (!exam) return res.status(404).json({ error: 'Examination not found.' });
+    if (req.user.role === 'teacher') {
+      const cls = (await pool.query(`SELECT teacher_id FROM classes WHERE id = $1`, [exam.class_id])).rows[0];
+      if (!cls || cls.teacher_id !== req.user.id) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+    }
+    const scores = (await pool.query(`SELECT student_id,raw_score,remarks,is_locked,updated_at FROM exam_scores WHERE exam_id=$1`, [exam.id])).rows;
+    res.json({ maxScore: exam.max_score, scores });
   } catch (e) { next(e); }
 });
 

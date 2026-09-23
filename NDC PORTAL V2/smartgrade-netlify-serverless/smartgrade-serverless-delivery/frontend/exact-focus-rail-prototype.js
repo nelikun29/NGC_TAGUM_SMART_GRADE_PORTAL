@@ -112,10 +112,122 @@
       color:var(--efr-blue)!important;font-size:.62rem!important;vertical-align:middle!important
     }
     .exact-selected-copy:hover{background:#eef4ff!important}
+    .exact-selected-edit{
+      display:inline-flex!important;align-items:center!important;justify-content:center!important;
+      min-width:28px!important;height:24px!important;padding:0 7px!important;margin-left:4px!important;
+      border:1px solid #cbd5e1!important;border-radius:7px!important;background:#fff!important;
+      color:var(--efr-blue)!important;font-size:.62rem!important;vertical-align:middle!important
+    }
+    .exact-selected-edit:hover{background:#eef4ff!important}
     .exact-create-class{
       width:calc(100% - 36px)!important;min-height:44px;margin:18px!important;border:1px solid #5d8bf0!important;border-radius:9px!important;
       background:var(--efr-blue)!important;color:#fff!important;font-size:.78rem!important;font-weight:900!important
     }
+
+    .exact-class-strip{
+      margin:0 0 16px;padding:14px 16px 16px;border:1px solid var(--efr-line);border-radius:14px;background:#fff;
+      box-shadow:0 8px 24px rgba(23,59,103,.045)
+    }
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="classes"] .exact-class-strip{
+      display:block!important
+    }
+    .exact-class-strip-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+    .exact-class-strip-head>div{display:flex;align-items:center;gap:10px}
+    .exact-class-strip-head strong{color:var(--efr-ink);font-size:.74rem}
+    .exact-class-strip-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+    .exact-class-quick{display:flex;align-items:center;gap:7px}
+    .exact-class-quick label{font-size:.62rem;font-weight:900;color:#475569;white-space:nowrap}
+    .exact-class-quick select{
+      min-width:250px;height:40px;padding:0 34px 0 11px;border:1px solid #d6dee8;border-radius:10px;background:#fff;
+      color:var(--efr-ink);font-size:.66rem;font-weight:800;box-shadow:0 5px 14px rgba(15,23,42,.05)
+    }
+    .exact-strip-create{
+      min-height:40px;padding:0 15px;border:1px solid rgba(255,255,255,.30);border-radius:10px;
+      background:linear-gradient(135deg,#2563eb,#1d4ed8)!important;color:#fff!important;
+      font-size:.69rem;font-weight:900;box-shadow:0 9px 18px rgba(37,99,235,.20);
+      transition:transform .16s ease,box-shadow .16s ease,filter .16s ease
+    }
+    .exact-strip-create:hover{transform:translateY(-2px);box-shadow:0 13px 24px rgba(37,99,235,.26);filter:brightness(1.04)}
+    .exact-strip-create:active{transform:translateY(0) scale(.98)}
+    .exact-strip-create i{margin-right:6px}
+    .exact-class-strip-track{
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px
+    }
+    .exact-strip-card{
+      --card-accent:#2563eb;
+      --card-accent-2:#60a5fa;
+      --card-tint:rgba(37,99,235,.10);
+      position:relative;min-width:0;border:1px solid rgba(255,255,255,.72);border-radius:16px;
+      background:
+        linear-gradient(145deg,rgba(255,255,255,.88),rgba(255,255,255,.58)),
+        linear-gradient(135deg,var(--card-tint),rgba(255,255,255,.10));
+      overflow:hidden;
+      box-shadow:0 10px 26px rgba(15,23,42,.09),inset 0 1px 0 rgba(255,255,255,.85);
+      backdrop-filter:blur(14px) saturate(135%);
+      -webkit-backdrop-filter:blur(14px) saturate(135%);
+      transition:transform .20s ease,box-shadow .20s ease,border-color .20s ease,filter .20s ease;
+      isolation:isolate
+    }
+    .exact-strip-card::before{
+      content:"";position:absolute;inset:0 0 auto 0;height:5px;
+      background:linear-gradient(90deg,var(--card-accent),var(--card-accent-2));
+      z-index:2
+    }
+    .exact-strip-card::after{
+      content:"";position:absolute;width:110px;height:110px;border-radius:999px;right:-34px;top:-40px;
+      background:radial-gradient(circle,var(--card-tint) 0%,rgba(255,255,255,0) 70%);
+      pointer-events:none;z-index:0
+    }
+    .exact-strip-card:nth-child(4n+1){--card-accent:#2563eb;--card-accent-2:#38bdf8;--card-tint:rgba(37,99,235,.15)}
+    .exact-strip-card:nth-child(4n+2){--card-accent:#7c3aed;--card-accent-2:#a78bfa;--card-tint:rgba(124,58,237,.14)}
+    .exact-strip-card:nth-child(4n+3){--card-accent:#0f9f8f;--card-accent-2:#34d399;--card-tint:rgba(15,159,143,.14)}
+    .exact-strip-card:nth-child(4n+4){--card-accent:#d97706;--card-accent-2:#fbbf24;--card-tint:rgba(217,119,6,.15)}
+    .exact-strip-card:hover{
+      transform:translateY(-5px) scale(1.015);
+      box-shadow:0 18px 34px rgba(15,23,42,.14),0 0 0 1px color-mix(in srgb,var(--card-accent) 28%,transparent);
+      filter:saturate(1.05)
+    }
+    .exact-strip-card.selected{
+      border-color:color-mix(in srgb,var(--card-accent) 82%,white);
+      box-shadow:0 20px 40px rgba(15,23,42,.16),0 0 0 4px color-mix(in srgb,var(--card-accent) 28%,transparent);
+      transform:translateY(-3px) scale(1.01)
+    }
+    .exact-strip-card.selected::before{height:6px}
+    .exact-selected-ribbon{
+      display:flex!important;align-items:center!important;gap:6px!important;
+      width:max-content!important;max-width:100%!important;
+      margin:0 0 10px!important;padding:6px 10px!important;border-radius:8px!important;
+      background:var(--card-accent)!important;color:#fff!important;
+      box-shadow:0 6px 14px rgba(15,23,42,.13)!important;
+      font-family:inherit!important;font-size:10px!important;font-weight:900!important;
+      line-height:1.15!important;letter-spacing:.02em!important;white-space:nowrap!important;
+      opacity:1!important;visibility:visible!important
+    }
+    .exact-selected-ribbon i,.exact-selected-ribbon span{
+      display:inline-block!important;color:#fff!important;
+      font-size:10px!important;font-weight:900!important;line-height:1.15!important;
+      opacity:1!important;visibility:visible!important
+    }
+    .exact-strip-card.selected .exact-strip-open{padding-top:17px}
+    .exact-strip-open{
+      position:relative;z-index:1;display:block;width:100%;padding:17px 14px 42px;border:0;background:transparent!important;text-align:left;color:var(--efr-ink)!important
+    }
+    .exact-strip-open strong{
+      display:block;padding-right:22px;color:#0f2742;font-size:.78rem;line-height:1.32;font-weight:950;letter-spacing:-.01em
+    }
+    .exact-strip-open span,.exact-strip-open small{display:block;margin-top:5px;color:#66778c;font-size:.63rem;line-height:1.35;font-weight:650}
+    .exact-strip-open small{color:color-mix(in srgb,var(--card-accent) 78%,#334155);font-weight:800}
+    .exact-strip-edit,.exact-strip-copy{
+      position:absolute;bottom:9px;z-index:3;min-height:27px;padding:0 9px;border:1px solid color-mix(in srgb,var(--card-accent) 26%,#d6dee8);border-radius:8px;
+      background:rgba(255,255,255,.82)!important;color:var(--card-accent)!important;font-size:.60rem;font-weight:900;
+      box-shadow:0 4px 10px rgba(15,23,42,.06);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      transition:transform .16s ease,background .16s ease,box-shadow .16s ease
+    }
+    .exact-strip-edit{left:11px}
+    .exact-strip-copy{left:68px}
+    .exact-strip-edit:hover,.exact-strip-copy:hover{transform:translateY(-1px);background:#fff!important;box-shadow:0 7px 14px rgba(15,23,42,.10)}
+    .exact-strip-edit i,.exact-strip-copy i{margin-right:4px}
+    .exact-strip-empty{padding:16px;border:1px dashed #cbd5e1;border-radius:10px;color:#718298;font-size:.68rem}
     .exact-rail-footer{margin-top:38px;padding:22px;border-top:1px solid rgba(255,255,255,.08);color:#9eb0c6;font-size:.60rem;line-height:1.45}
     .exact-rail-footer strong{display:block;color:#c8d5e4;font-size:.64rem;margin-bottom:2px}
 
@@ -123,12 +235,10 @@
       display:none;
       margin:4px 0 22px;
     }
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="dashboard"] .exact-view-panel,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-view-panel,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="profile"] .exact-view-panel{display:block}
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="dashboard"] .exact-class-workspace,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-class-workspace,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="profile"] .exact-class-workspace{display:none!important}
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="overview"] .exact-view-panel,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-view-panel{display:block}
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="overview"] .exact-class-workspace,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-class-workspace{display:none!important}
 
     .exact-page-head{margin:6px 0 22px}
     .exact-page-kicker{font-size:.64rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8a9aab}
@@ -169,13 +279,16 @@
     @media(max-width:820px){
       .exact-big-stats,.exact-mini-stats{grid-template-columns:1fr}
       .exact-notification-card{grid-template-columns:1fr}
+      .exact-class-strip-track{display:flex;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:4px}
+      .exact-strip-card{flex:0 0 220px;scroll-snap-align:start}
     }
 
     .exact-breadcrumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 14px;color:#8795a6;font-size:.66rem;font-weight:600}
     .exact-breadcrumbs i{font-size:.52rem;color:#a5b1bd}
 
-    #teacher-section.sg-exact-focus-prototype .sg-ref-selected{
-      margin:0!important;padding:0 0 14px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected,
+    #teacher-section.sg-exact-focus-prototype .exact-legacy-selected-panel{
+      display:none!important
     }
     #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div{
       display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:24px!important;align-items:center!important
@@ -326,7 +439,7 @@
     delete brand.dataset.exactTeacherHeader;
   }
 
-  let exactView='profile';
+  let exactView='overview';
 
   function totals(){
     const rows=classRows();
@@ -369,6 +482,7 @@
     return [
       section.querySelector('.exact-breadcrumbs'),
       document.getElementById('teacher-selected-class-name')?.closest('.glass-card'),
+      section.querySelector('.exact-class-strip'),
       section.querySelector('.sg-ref-tabs')?.parentElement || section.querySelector('.sg-ref-tabs'),
       section.querySelector('.exact-summary-strip'),
       document.getElementById('teacher-tab-content')
@@ -536,7 +650,7 @@
         Store.user={...current,email:data.email||current.email,profile:data.profile||current.profile};
         host.remove();
         Toast.show('Profile Updated',data.message||'Teacher profile updated successfully.','success');
-        exactView='profile';
+        exactView='overview';
         renderExactView();
         const name=document.getElementById('user-name-display');
         if(name) name.textContent=data.profile?[data.profile.first_name,data.profile.last_name].filter(Boolean).join(' '):(data.email||current.email||'');
@@ -552,48 +666,35 @@
     markWorkspace();
     const s=totals();
 
-    if(exactView==='dashboard'){
+    if(exactView==='overview'){
+      const tp=Store?.user?.profile||{};
       panel.innerHTML=`
         <div class="exact-page-head">
-          <div class="exact-page-kicker">Teacher Dashboard</div>
-          <h2>Overall Teaching Overview</h2>
-          <p>A consolidated view of your active classes, enrolled learners, and pending enrollment requests.</p>
+          <div class="exact-page-kicker">Teacher Overview</div>
+          <h2>Welcome ${esc(teacherDisplayName())}</h2>
+          <p>Your account information and teaching activity in one place.</p>
         </div>
         <div class="exact-big-stats">
           <div class="exact-big-card"><div class="icon"><i class="fa-solid fa-book-open"></i></div><div class="label">Number of Classes</div><div class="value">${s.classes}</div><div class="note">Classes created under your account</div></div>
           <div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-users"></i></div><div class="label">Enrolled Students</div><div class="value">${s.students}</div><div class="note">Total enrollment across your classes</div></div>
-          <div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-clock"></i></div><div class="label">Overall Pending Requests</div><div class="value">${s.pending}</div><div class="note">Enrollment requests awaiting action</div></div>
-        </div>`;
-    } else if(exactView==='profile'){
-      const tp=Store?.user?.profile||{};
-      panel.innerHTML=`
-        <div class="exact-page-head">
-          <div class="exact-page-kicker">Profile</div>
-          <h2>Welcome ${esc(teacherDisplayName())} to your Dashboard</h2>
-          <p>Your account overview and a compact snapshot of your teaching workload.</p>
-        </div>
-        <div class="exact-mini-stats">
-          <div class="exact-mini-card"><strong>${s.classes}</strong><span>Classes</span></div>
-          <div class="exact-mini-card"><strong>${s.students}</strong><span>Enrolled Students</span></div>
-          <div class="exact-mini-card"><strong>${s.pending}</strong><span>Pending Requests</span></div>
+          <div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-clock"></i></div><div class="label">Pending Requests</div><div class="value">${s.pending}</div><div class="note">Enrollment requests awaiting action</div></div>
         </div>
         <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
-          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <i class="fa-solid fa-id-card"></i>
+            </span>
             <div>
-              <h3 class="text-base font-black text-slate-800">Teacher Profile</h3>
-              <p class="mt-1 text-xs text-slate-500">Keep your email active because password-reset links are sent to this address.</p>
-              <div class="mt-4 grid gap-2 text-sm text-slate-700">
-                <div><b>Name:</b> ${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</div>
-                <div><b>Department:</b> ${esc(tp.department||'—')}</div>
-                <div><b>Email:</b> ${esc(Store?.user?.email||'—')}</div>
-              </div>
+              <h3 class="text-base font-black text-slate-800">Account Profile</h3>
+              <p class="mt-1 text-xs text-slate-500">Read-only account summary. Keep your email active for login and password recovery.</p>
             </div>
-            <button type="button" id="exact-edit-teacher-profile" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
-              <i class="fa-solid fa-user-pen mr-2"></i>Edit Profile
-            </button>
+          </div>
+          <div class="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+            <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Name</span><b class="mt-1 block text-slate-800">${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</b></div>
+            <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Department</span><b class="mt-1 block text-slate-800">${esc(tp.department||'—')}</b></div>
+            <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Email</span><b class="mt-1 block break-all text-slate-800">${esc(Store?.user?.email||'—')}</b></div>
           </div>
         </div>`;
-      panel.querySelector('#exact-edit-teacher-profile')?.addEventListener('click',openTeacherProfileEditor);
     } else if(exactView==='notifications'){
       renderNotificationsPanel(panel);
     } else {
@@ -602,32 +703,16 @@
   }
 
   function railHtml(){
-    const rows=classRows();
-    const selected=selectedClass();
     return `
       <div class="exact-brand">
         <strong>Teacher Workspace</strong>
         <span>Teach &nbsp;•&nbsp; Track &nbsp;•&nbsp; Support &nbsp;•&nbsp; Empower</span>
       </div>
       <nav class="exact-primary-nav">
-        <button type="button" data-exact-nav="profile"><i class="fa-solid fa-user"></i><span>Profile</span></button>
-        <button type="button" data-exact-nav="dashboard"><i class="fa-solid fa-house"></i><span>Dashboard</span></button>
+        <button type="button" data-exact-nav="overview"><i class="fa-solid fa-house-user"></i><span>Overview</span></button>
         <button type="button" data-exact-nav="classes" class="active"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
         <button type="button" data-exact-nav="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span>${totals().pending?'<b class="badge">'+(totals().pending>99?'99+':totals().pending)+'</b>':''}</button>
       </nav>
-      <div class="exact-rail-divider"></div>
-      <p class="exact-rail-label">My Classes</p>
-      <div class="exact-class-list">
-        ${rows.map(c=>`
-          <button type="button" class="exact-class-item ${String(c.id)===String(selected?.id)?'selected':''}" data-exact-class="${String(c.id).replace(/"/g,'&quot;')}">
-            <strong>${String(c.subject||'Untitled Subject').replace(/</g,'&lt;')}</strong>
-            <small>
-              <span>${String(c.year_level||'').replace(/</g,'&lt;')} &nbsp;•&nbsp; ${String(c.section||'').replace(/</g,'&lt;')}${c.room_number?' &nbsp;•&nbsp; Room: '+String(c.room_number).replace(/</g,'&lt;'):''}${c.class_code?' &nbsp;•&nbsp; Class Code: '+String(c.class_code).replace(/</g,'&lt;'):''}</span>
-            </small>
-          </button>
-        `).join('')}
-      </div>
-      <button type="button" class="exact-create-class"><i class="fa-solid fa-plus mr-2"></i>Create Class</button>
       <div class="exact-rail-footer"><strong>NDC Tagum Foundation, Inc.</strong>Smart Grade & Attendance Portal</div>
     `;
   }
@@ -640,8 +725,6 @@
     if(rail.dataset.exactSignature===sig) return;
     rail.dataset.exactSignature=sig;
     rail.innerHTML=railHtml();
-    rail.querySelectorAll('[data-exact-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactClass)));
-    rail.querySelector('.exact-create-class')?.addEventListener('click',()=>Teacher.showCreateClass());
     rail.querySelectorAll('[data-exact-nav]').forEach(btn=>btn.addEventListener('click',()=>{
       const view=btn.dataset.exactNav;
       if(view==='classes'){
@@ -658,10 +741,110 @@
   function markLegacyBlocks(section){
     const root=section.querySelector(':scope > .space-y-6');
     if(!root) return;
-    const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID));
+
+    // Never allow Phase 2 components to inherit a stale legacy-hide marker.
+    root.querySelectorAll('.exact-view-panel,.exact-class-strip,.exact-breadcrumbs,.exact-summary-strip')
+      .forEach(el=>el.removeAttribute('data-exact-hide'));
+
+    const children=[...root.children].filter(el=>!el.matches('#sg-focus-mobile-nav,.fr-workspace-masthead,.fr-summary-grid,#'+RAIL_ID+',.exact-view-panel,.exact-class-strip,.exact-breadcrumbs,.exact-summary-strip'));
     if(children[0]) children[0].dataset.exactHide='true';
     if(children[1]) children[1].dataset.exactHide='true';
   }
+
+  function ensureClassStrip(section){
+    const selectedCard=document.getElementById('teacher-selected-class-name')?.closest('.glass-card');
+    const tabsCard=section.querySelector('.sg-ref-tabs')?.closest('.glass-card') || section.querySelector('.sg-ref-tabs')?.parentElement;
+    if(!selectedCard && !tabsCard) return;
+
+    let strip=section.querySelector('.exact-class-strip');
+    if(!strip){
+      strip=document.createElement('section');
+      strip.className='exact-class-strip exact-class-workspace';
+      if(selectedCard){
+        selectedCard.insertAdjacentElement('afterend',strip);
+      }else if(tabsCard){
+        tabsCard.insertAdjacentElement('beforebegin',strip);
+      }
+    }
+
+    strip.removeAttribute('data-exact-hide');
+    if(exactView==='classes'){
+      strip.style.setProperty('display','block','important');
+    }else{
+      strip.style.removeProperty('display');
+    }
+
+    const rows=classRows();
+    const selected=selectedClass();
+    const sig=JSON.stringify(rows.map(c=>[
+      c.id,c.subject,c.year_level,c.section,c.room_number,c.class_code,
+      String(c.id)===String(selected?.id)
+    ]));
+
+    if(strip.dataset.sig===sig) return;
+    strip.dataset.sig=sig;
+
+    strip.innerHTML=`
+      <div class="exact-class-strip-head">
+        <div>
+          <span class="exact-page-kicker">My Classes</span>
+          <strong>${rows.length} class${rows.length===1?'':'es'}</strong>
+        </div>
+        <div class="exact-class-strip-actions">
+          <div class="exact-class-quick">
+            <label for="exact-class-quick-select">Quick Select</label>
+            <select id="exact-class-quick-select" aria-label="Quick Select Class">
+              ${rows.map(c=>`
+                <option value="${esc(c.id)}" ${String(c.id)===String(selected?.id)?'selected':''}>
+                  ${esc(c.subject||'Untitled Subject')} — ${esc(c.section||'—')}
+                </option>
+              `).join('')}
+            </select>
+          </div>
+          <button type="button" class="exact-strip-create">
+            <i class="fa-solid fa-plus"></i>
+            Create Class
+          </button>
+        </div>
+      </div>
+      <div class="exact-class-strip-track">
+        ${rows.length ? rows.map(c=>`
+          <article class="exact-strip-card ${String(c.id)===String(selected?.id)?'selected':''}" data-class-id="${esc(c.id)}">
+                        <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
+              ${String(c.id)===String(selected?.id)?'<div class="exact-selected-ribbon"><i class="fa-solid fa-circle-check"></i><span>Currently Selected</span></div>':''}
+              <strong>${esc(c.subject||'Untitled Subject')}</strong>
+              <span>${esc(c.year_level||'—')} • ${esc(c.section||'—')}</span>
+              <span>Room: ${esc(c.room_number||'—')}</span>
+              <small>Class Code: ${esc(c.class_code||'—')}</small>
+            </button>
+            <button type="button" class="exact-strip-edit" data-exact-strip-edit="${esc(c.id)}" title="Edit class">
+              <i class="fa-solid fa-pen-to-square"></i>
+              Edit
+            </button>
+            ${c.class_code ? `
+              <button type="button" class="exact-strip-copy" data-exact-strip-copy="${esc(c.id)}" data-class-code="${esc(c.class_code)}" title="Copy class code">
+                <i class="fa-regular fa-copy"></i>
+                Copy
+              </button>
+            ` : ''}
+          </article>
+        `).join('') : '<div class="exact-strip-empty">No classes yet. Create your first class to begin.</div>'}
+      </div>
+    `;
+
+    strip.querySelector('.exact-strip-create')?.addEventListener('click',()=>Teacher.showCreateClass());
+    strip.querySelector('#exact-class-quick-select')?.addEventListener('change',e=>Teacher.selectClass(e.target.value));
+    strip.querySelectorAll('[data-exact-strip-class]').forEach(btn=>btn.addEventListener('click',()=>Teacher.selectClass(btn.dataset.exactStripClass)));
+    strip.querySelectorAll('[data-exact-strip-edit]').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      Teacher.editClass(btn.dataset.exactStripEdit);
+    }));
+    strip.querySelectorAll('[data-exact-strip-copy]').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      Teacher.copyClassCode(btn.dataset.classCode);
+    }));
+  }
+
 
   function ensureSelectedClassCode(){
     const meta=document.getElementById('teacher-selected-class-meta');
@@ -676,8 +859,10 @@
     meta.dataset.exactCodeSig=sig;
     meta.innerHTML='<span>'+esc(visible)+'</span>'+(c.class_code
       ? ' <button type="button" class="exact-selected-copy" title="Copy class code" aria-label="Copy class code"><i class="fa-regular fa-copy"></i></button>'
-      : '');
+      : '')+
+      ' <button type="button" class="exact-selected-edit" title="Edit class" aria-label="Edit class"><i class="fa-solid fa-pen-to-square"></i></button>';
     meta.querySelector('.exact-selected-copy')?.addEventListener('click',()=>Teacher.copyClassCode(c.class_code));
+    meta.querySelector('.exact-selected-edit')?.addEventListener('click',()=>Teacher.editClass(c.id));
   }
 
   function ensureBreadcrumbs(section){
@@ -751,6 +936,15 @@
     }
   }
 
+  function hideLegacySelectedPanel(section){
+    const name=document.getElementById('teacher-selected-class-name');
+    const card=name?.closest('.glass-card');
+    if(!card) return;
+    card.classList.add('sg-ref-selected','exact-legacy-selected-panel');
+    card.style.setProperty('display','none','important');
+    card.setAttribute('aria-hidden','true');
+  }
+
   function decorate(){
     const section=document.getElementById('teacher-section');
     if(!teacherVisible()){restoreHeader();return}
@@ -759,6 +953,8 @@
     rebuildRail(section);
     markLegacyBlocks(section);
     ensureSelectedClassCode();
+    hideLegacySelectedPanel(section);
+    ensureClassStrip(section);
     ensureBreadcrumbs(section);
     ensureSummary();
     decorateGradebookExact();
