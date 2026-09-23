@@ -198,8 +198,7 @@
       box-shadow:0 7px 16px rgba(15,23,42,.18)!important
     }
     .exact-selected-badge i{display:inline-block!important;color:#fff!important;font-size:.62rem!important}
-    .exact-selected-badge::after{
-      content:"Currently Selected";
+    .exact-selected-badge span{
       display:inline-block!important;
       color:#fff!important;
       font-size:.60rem!important;
@@ -208,7 +207,6 @@
       letter-spacing:.02em!important;
       white-space:nowrap!important
     }
-    .exact-selected-badge{font-size:0!important}
     .exact-strip-card.selected .exact-strip-open{padding-top:46px}
     .exact-strip-open{
       position:relative;z-index:1;display:block;width:100%;padding:17px 14px 42px;border:0;background:transparent!important;text-align:left;color:var(--efr-ink)!important
@@ -809,7 +807,7 @@
       <div class="exact-class-strip-track">
         ${rows.length ? rows.map(c=>`
           <article class="exact-strip-card ${String(c.id)===String(selected?.id)?'selected':''}" data-class-id="${esc(c.id)}">
-            ${String(c.id)===String(selected?.id)?'<div class="exact-selected-badge" aria-label="Currently Selected"><i class="fa-solid fa-circle-check"></i></div>':''}
+            ${String(c.id)===String(selected?.id)?'<div class="exact-selected-badge" aria-label="Currently Selected"><i class="fa-solid fa-circle-check"></i><span>Currently Selected</span></div>':''}
             <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
               <strong>${esc(c.subject||'Untitled Subject')}</strong>
               <span>${esc(c.year_level||'—')} • ${esc(c.section||'—')}</span>
