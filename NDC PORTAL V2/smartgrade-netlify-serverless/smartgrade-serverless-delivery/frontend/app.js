@@ -7222,6 +7222,10 @@ const Admin = {
                     u.approval_status
                   )}
 
+                  ${u.locked_until
+                    ? '<span class="ml-1 text-amber-700 font-bold">· Locked</span>'
+                    : ''}
+
                 </td>
 
 
@@ -7234,6 +7238,12 @@ const Admin = {
                     >
                       Reset Password
                     </button>
+
+                    ${
+                      (u.locked_until || Number(u.failed_login_attempts || 0) > 0)
+                        ? `<button onclick="Admin.unlockAccount('${u.id}')" class="text-xs font-bold text-amber-700">Unlock Account</button>`
+                        : ''
+                    }
 
                     ${
                       u.is_active
@@ -7266,6 +7276,28 @@ const Admin = {
     document.body.appendChild(m);
     const close=()=>m.remove();m.querySelectorAll('[data-close]').forEach(x=>x.onclick=close);
     m.querySelector('form').onsubmit=async e=>{e.preventDefault();const p=e.target.password.value;const confirm=e.target.confirm.value;if(p.length<8){Toast.show('Invalid Password','Password must be at least 8 characters.','error');return;}if(p!==confirm){Toast.show('Passwords Do Not Match','Please enter the same password twice.','error');return;}try{await api('POST',`/admin/users/${id}/reset-password`,{newPassword:p});Toast.show('Password Reset','Password updated and login lock cleared.','success');close();}catch{}};
+  },
+
+
+  async unlockAccount(id) {
+
+    try {
+
+      await api(
+        'POST',
+        `/admin/users/${id}/unlock`
+      );
+
+      Toast.show(
+        'Account Unlocked',
+        'Login restriction cleared. The existing password is unchanged.',
+        'success'
+      );
+
+      Admin.renderUsers();
+
+    } catch {}
+
   },
 
 
