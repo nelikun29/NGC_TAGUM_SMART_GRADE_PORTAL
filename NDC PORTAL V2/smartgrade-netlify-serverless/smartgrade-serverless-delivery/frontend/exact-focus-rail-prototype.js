@@ -198,7 +198,16 @@
       box-shadow:0 7px 16px rgba(15,23,42,.18)!important
     }
     .exact-selected-badge i{display:inline-block!important;color:#fff!important;font-size:.62rem!important}
-    .exact-selected-badge::after{content:"Currently Selected";display:inline-block!important;color:#fff!important}
+    .exact-selected-badge::after{
+      content:"Currently Selected";
+      display:inline-block!important;
+      color:#fff!important;
+      font-size:.60rem!important;
+      font-weight:900!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      white-space:nowrap!important
+    }
     .exact-selected-badge{font-size:0!important}
     .exact-strip-card.selected .exact-strip-open{padding-top:46px}
     .exact-strip-open{
