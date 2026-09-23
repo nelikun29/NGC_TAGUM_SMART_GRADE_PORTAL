@@ -900,6 +900,8 @@ const Auth = {
       Store.user =
         data.user;
 
+      ApprovalManager.startAutoRefresh();
+
 
       Toast.show(
         'Welcome',
