@@ -187,25 +187,23 @@
     }
     .exact-strip-card.selected::before{height:6px}
     .exact-selected-badge{
-      position:absolute;top:12px;right:12px;z-index:6;
-      display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;
-      min-height:28px!important;padding:0 11px!important;border-radius:999px!important;
-      border:1px solid rgba(255,255,255,.55)!important;
+      position:absolute!important;top:12px!important;right:12px!important;z-index:20!important;
+      display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;
+      width:auto!important;min-width:118px!important;max-width:none!important;height:28px!important;min-height:28px!important;
+      padding:0 12px!important;margin:0!important;border-radius:999px!important;
+      border:1px solid rgba(255,255,255,.65)!important;
       background:var(--card-accent)!important;
       color:#fff!important;
-      font-size:.60rem!important;font-weight:900!important;line-height:1!important;letter-spacing:.02em!important;
-      white-space:nowrap!important;opacity:1!important;visibility:visible!important;
-      box-shadow:0 7px 16px rgba(15,23,42,.18)!important
+      font-family:inherit!important;font-size:10px!important;font-weight:900!important;line-height:28px!important;letter-spacing:.01em!important;
+      text-indent:0!important;text-transform:none!important;white-space:nowrap!important;overflow:visible!important;
+      opacity:1!important;visibility:visible!important;
+      box-shadow:0 7px 16px rgba(15,23,42,.18)!important;
+      pointer-events:none!important
     }
-    .exact-selected-badge i{display:inline-block!important;color:#fff!important;font-size:.62rem!important}
-    .exact-selected-badge span{
-      display:inline-block!important;
-      color:#fff!important;
-      font-size:.60rem!important;
-      font-weight:900!important;
-      line-height:1!important;
-      letter-spacing:.02em!important;
-      white-space:nowrap!important
+    .exact-selected-badge i{
+      display:inline-block!important;position:static!important;
+      width:auto!important;height:auto!important;margin:0!important;
+      color:#fff!important;font-size:10px!important;line-height:1!important
     }
     .exact-strip-card.selected .exact-strip-open{padding-top:46px}
     .exact-strip-open{
@@ -807,7 +805,7 @@
       <div class="exact-class-strip-track">
         ${rows.length ? rows.map(c=>`
           <article class="exact-strip-card ${String(c.id)===String(selected?.id)?'selected':''}" data-class-id="${esc(c.id)}">
-            ${String(c.id)===String(selected?.id)?'<div class="exact-selected-badge" aria-label="Currently Selected"><i class="fa-solid fa-circle-check"></i><span>Currently Selected</span></div>':''}
+            ${String(c.id)===String(selected?.id)?'<div class="exact-selected-badge" aria-label="Currently Selected"><i class="fa-solid fa-circle-check"></i>Currently Selected</div>':''}
             <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
               <strong>${esc(c.subject||'Untitled Subject')}</strong>
               <span>${esc(c.year_level||'—')} • ${esc(c.section||'—')}</span>
