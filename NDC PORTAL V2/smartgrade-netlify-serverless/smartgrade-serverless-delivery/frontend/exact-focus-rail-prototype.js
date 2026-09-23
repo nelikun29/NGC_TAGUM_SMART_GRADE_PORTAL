@@ -667,22 +667,23 @@
           <div class="exact-mini-card"><strong>${s.pending}</strong><span>Pending Requests</span></div>
         </div>
         <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
-          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h3 class="text-base font-black text-slate-800">Teacher Profile</h3>
-              <p class="mt-1 text-xs text-slate-500">Keep your email active because password-reset links are sent to this address.</p>
-              <div class="mt-4 grid gap-2 text-sm text-slate-700">
-                <div><b>Name:</b> ${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</div>
-                <div><b>Department:</b> ${esc(tp.department||'—')}</div>
-                <div><b>Email:</b> ${esc(Store?.user?.email||'—')}</div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                <i class="fa-solid fa-id-card"></i>
+              </span>
+              <div>
+                <h3 class="text-base font-black text-slate-800">Teacher Profile</h3>
+                <p class="mt-1 text-xs text-slate-500">Read-only account summary. Keep your email active for login and password recovery.</p>
               </div>
             </div>
-            <button type="button" id="exact-edit-teacher-profile" class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
-              <i class="fa-solid fa-user-pen mr-2"></i>Edit Profile
-            </button>
+            <div class="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+              <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Name</span><b class="mt-1 block text-slate-800">${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</b></div>
+              <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Department</span><b class="mt-1 block text-slate-800">${esc(tp.department||'—')}</b></div>
+              <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Email</span><b class="mt-1 block break-all text-slate-800">${esc(Store?.user?.email||'—')}</b></div>
+            </div>
           </div>
         </div>`;
-      panel.querySelector('#exact-edit-teacher-profile')?.addEventListener('click',openTeacherProfileEditor);
     } else if(exactView==='notifications'){
       renderNotificationsPanel(panel);
     } else {
