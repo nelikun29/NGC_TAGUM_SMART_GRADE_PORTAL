@@ -186,26 +186,22 @@
       transform:translateY(-3px) scale(1.01)
     }
     .exact-strip-card.selected::before{height:6px}
-    .exact-selected-badge{
-      position:absolute!important;top:12px!important;right:12px!important;z-index:20!important;
-      display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;
-      width:auto!important;min-width:118px!important;max-width:none!important;height:28px!important;min-height:28px!important;
-      padding:0 12px!important;margin:0!important;border-radius:999px!important;
-      border:1px solid rgba(255,255,255,.65)!important;
-      background:var(--card-accent)!important;
-      color:#fff!important;
-      font-family:inherit!important;font-size:10px!important;font-weight:900!important;line-height:28px!important;letter-spacing:.01em!important;
-      text-indent:0!important;text-transform:none!important;white-space:nowrap!important;overflow:visible!important;
-      opacity:1!important;visibility:visible!important;
-      box-shadow:0 7px 16px rgba(15,23,42,.18)!important;
-      pointer-events:none!important
+    .exact-selected-ribbon{
+      display:flex!important;align-items:center!important;gap:6px!important;
+      width:max-content!important;max-width:100%!important;
+      margin:0 0 10px!important;padding:6px 10px!important;border-radius:8px!important;
+      background:var(--card-accent)!important;color:#fff!important;
+      box-shadow:0 6px 14px rgba(15,23,42,.13)!important;
+      font-family:inherit!important;font-size:10px!important;font-weight:900!important;
+      line-height:1.15!important;letter-spacing:.02em!important;white-space:nowrap!important;
+      opacity:1!important;visibility:visible!important
     }
-    .exact-selected-badge i{
-      display:inline-block!important;position:static!important;
-      width:auto!important;height:auto!important;margin:0!important;
-      color:#fff!important;font-size:10px!important;line-height:1!important
+    .exact-selected-ribbon i,.exact-selected-ribbon span{
+      display:inline-block!important;color:#fff!important;
+      font-size:10px!important;font-weight:900!important;line-height:1.15!important;
+      opacity:1!important;visibility:visible!important
     }
-    .exact-strip-card.selected .exact-strip-open{padding-top:46px}
+    .exact-strip-card.selected .exact-strip-open{padding-top:17px}
     .exact-strip-open{
       position:relative;z-index:1;display:block;width:100%;padding:17px 14px 42px;border:0;background:transparent!important;text-align:left;color:var(--efr-ink)!important
     }
@@ -805,8 +801,8 @@
       <div class="exact-class-strip-track">
         ${rows.length ? rows.map(c=>`
           <article class="exact-strip-card ${String(c.id)===String(selected?.id)?'selected':''}" data-class-id="${esc(c.id)}">
-            ${String(c.id)===String(selected?.id)?'<div class="exact-selected-badge" aria-label="Currently Selected"><i class="fa-solid fa-circle-check"></i>Currently Selected</div>':''}
-            <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
+                        <button type="button" class="exact-strip-open" data-exact-strip-class="${esc(c.id)}">
+              ${String(c.id)===String(selected?.id)?'<div class="exact-selected-ribbon"><i class="fa-solid fa-circle-check"></i><span>Currently Selected</span></div>':''}
               <strong>${esc(c.subject||'Untitled Subject')}</strong>
               <span>${esc(c.year_level||'—')} • ${esc(c.section||'—')}</span>
               <span>Room: ${esc(c.room_number||'—')}</span>
