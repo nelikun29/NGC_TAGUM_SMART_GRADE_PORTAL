@@ -226,12 +226,10 @@
       display:none;
       margin:4px 0 22px;
     }
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="dashboard"] .exact-view-panel,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-view-panel,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="profile"] .exact-view-panel{display:block}
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="dashboard"] .exact-class-workspace,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-class-workspace,
-    #teacher-section.sg-exact-focus-prototype[data-exact-view="profile"] .exact-class-workspace{display:none!important}
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="overview"] .exact-view-panel,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-view-panel{display:block}
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="overview"] .exact-class-workspace,
+    #teacher-section.sg-exact-focus-prototype[data-exact-view="notifications"] .exact-class-workspace{display:none!important}
 
     .exact-page-head{margin:6px 0 22px}
     .exact-page-kicker{font-size:.64rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8a9aab}
@@ -431,7 +429,7 @@
     delete brand.dataset.exactTeacherHeader;
   }
 
-  let exactView='profile';
+  let exactView='overview';
 
   function totals(){
     const rows=classRows();
@@ -642,7 +640,7 @@
         Store.user={...current,email:data.email||current.email,profile:data.profile||current.profile};
         host.remove();
         Toast.show('Profile Updated',data.message||'Teacher profile updated successfully.','success');
-        exactView='profile';
+        exactView='overview';
         renderExactView();
         const name=document.getElementById('user-name-display');
         if(name) name.textContent=data.profile?[data.profile.first_name,data.profile.last_name].filter(Boolean).join(' '):(data.email||current.email||'');
@@ -658,47 +656,33 @@
     markWorkspace();
     const s=totals();
 
-    if(exactView==='dashboard'){
+    if(exactView==='overview'){
+      const tp=Store?.user?.profile||{};
       panel.innerHTML=`
         <div class="exact-page-head">
-          <div class="exact-page-kicker">Teacher Dashboard</div>
-          <h2>Overall Teaching Overview</h2>
-          <p>A consolidated view of your active classes, enrolled learners, and pending enrollment requests.</p>
+          <div class="exact-page-kicker">Teacher Overview</div>
+          <h2>Welcome ${esc(teacherDisplayName())}</h2>
+          <p>Your account information and teaching activity in one place.</p>
         </div>
         <div class="exact-big-stats">
           <div class="exact-big-card"><div class="icon"><i class="fa-solid fa-book-open"></i></div><div class="label">Number of Classes</div><div class="value">${s.classes}</div><div class="note">Classes created under your account</div></div>
           <div class="exact-big-card green"><div class="icon"><i class="fa-solid fa-users"></i></div><div class="label">Enrolled Students</div><div class="value">${s.students}</div><div class="note">Total enrollment across your classes</div></div>
-          <div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-clock"></i></div><div class="label">Overall Pending Requests</div><div class="value">${s.pending}</div><div class="note">Enrollment requests awaiting action</div></div>
-        </div>`;
-    } else if(exactView==='profile'){
-      const tp=Store?.user?.profile||{};
-      panel.innerHTML=`
-        <div class="exact-page-head">
-          <div class="exact-page-kicker">Profile</div>
-          <h2>Welcome ${esc(teacherDisplayName())} to your Dashboard</h2>
-          <p>Your account overview and a compact snapshot of your teaching workload.</p>
-        </div>
-        <div class="exact-mini-stats">
-          <div class="exact-mini-card"><strong>${s.classes}</strong><span>Classes</span></div>
-          <div class="exact-mini-card"><strong>${s.students}</strong><span>Enrolled Students</span></div>
-          <div class="exact-mini-card"><strong>${s.pending}</strong><span>Pending Requests</span></div>
+          <div class="exact-big-card gold"><div class="icon"><i class="fa-solid fa-clock"></i></div><div class="label">Pending Requests</div><div class="value">${s.pending}</div><div class="note">Enrollment requests awaiting action</div></div>
         </div>
         <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                <i class="fa-solid fa-id-card"></i>
-              </span>
-              <div>
-                <h3 class="text-base font-black text-slate-800">Teacher Profile</h3>
-                <p class="mt-1 text-xs text-slate-500">Read-only account summary. Keep your email active for login and password recovery.</p>
-              </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <i class="fa-solid fa-id-card"></i>
+            </span>
+            <div>
+              <h3 class="text-base font-black text-slate-800">Account Profile</h3>
+              <p class="mt-1 text-xs text-slate-500">Read-only account summary. Keep your email active for login and password recovery.</p>
             </div>
-            <div class="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
-              <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Name</span><b class="mt-1 block text-slate-800">${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</b></div>
-              <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Department</span><b class="mt-1 block text-slate-800">${esc(tp.department||'—')}</b></div>
-              <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Email</span><b class="mt-1 block break-all text-slate-800">${esc(Store?.user?.email||'—')}</b></div>
-            </div>
+          </div>
+          <div class="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+            <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Name</span><b class="mt-1 block text-slate-800">${esc([tp.first_name,tp.last_name].filter(Boolean).join(' ')||'—')}</b></div>
+            <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Department</span><b class="mt-1 block text-slate-800">${esc(tp.department||'—')}</b></div>
+            <div class="rounded-xl bg-slate-50 px-4 py-3"><span class="block text-[10px] font-black uppercase tracking-wider text-slate-400">Email</span><b class="mt-1 block break-all text-slate-800">${esc(Store?.user?.email||'—')}</b></div>
           </div>
         </div>`;
     } else if(exactView==='notifications'){
@@ -715,8 +699,7 @@
         <span>Teach &nbsp;•&nbsp; Track &nbsp;•&nbsp; Support &nbsp;•&nbsp; Empower</span>
       </div>
       <nav class="exact-primary-nav">
-        <button type="button" data-exact-nav="profile"><i class="fa-solid fa-user"></i><span>Profile</span></button>
-        <button type="button" data-exact-nav="dashboard"><i class="fa-solid fa-house"></i><span>Dashboard</span></button>
+        <button type="button" data-exact-nav="overview"><i class="fa-solid fa-house-user"></i><span>Overview</span></button>
         <button type="button" data-exact-nav="classes" class="active"><i class="fa-solid fa-book-open"></i><span>My Classes</span></button>
         <button type="button" data-exact-nav="notifications"><i class="fa-solid fa-bell"></i><span>Notifications</span>${totals().pending?'<b class="badge">'+(totals().pending>99?'99+':totals().pending)+'</b>':''}</button>
       </nav>
@@ -775,7 +758,11 @@
     }
 
     strip.removeAttribute('data-exact-hide');
-    if(exactView==='classes') strip.style.setProperty('display','block','important');
+    if(exactView==='classes'){
+      strip.style.setProperty('display','block','important');
+    }else{
+      strip.style.removeProperty('display');
+    }
 
     const rows=classRows();
     const selected=selectedClass();
