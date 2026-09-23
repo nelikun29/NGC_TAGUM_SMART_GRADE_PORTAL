@@ -128,11 +128,20 @@ async function api(method, path, body) {
       (data && data.error) ||
       'An unexpected error occurred.';
 
-    Toast.show(
-      'Error',
-      message,
-      'error'
-    );
+    const sessionEnded =
+      !Store.token ||
+      !Store.user;
+
+    if (
+      !sessionEnded ||
+      (res.status !== 401 && res.status !== 403)
+    ) {
+      Toast.show(
+        'Error',
+        message,
+        'error'
+      );
+    }
 
     throw new Error(message);
   }
@@ -814,6 +823,27 @@ const ApprovalManager = {
 
 
   // ----------------------------------------------------------
+  // STOP AUTOMATIC REFRESH
+  // ----------------------------------------------------------
+
+  stopAutoRefresh() {
+
+    if (this.state.timer) {
+      clearInterval(this.state.timer);
+      this.state.timer = null;
+    }
+
+    this.state.loading = false;
+    this.state.adminPending = 0;
+    this.state.teacherPending = 0;
+    this.state.unfinalizePending = 0;
+    this.updateBadge(0);
+    this.updateTitle(0);
+
+  },
+
+
+  // ----------------------------------------------------------
   // FORCE REFRESH
   // ----------------------------------------------------------
 
@@ -1019,21 +1049,28 @@ const Auth = {
 
   logout() {
 
+    ApprovalManager.stopAutoRefresh();
+
+    if (Teacher?._attendanceQrTimer) {
+      clearInterval(Teacher._attendanceQrTimer);
+      Teacher._attendanceQrTimer = null;
+    }
+
     api(
       'POST',
       '/auth/logout'
     ).catch(() => {});
 
-
     Store.token = null;
-
     Store.user = null;
 
-
-    ApprovalManager.refresh();
-
-
     Views.renderForRole();
+
+    Toast.show(
+      'Logged Out',
+      'You have been logged out successfully.',
+      'success'
+    );
 
   }
 
