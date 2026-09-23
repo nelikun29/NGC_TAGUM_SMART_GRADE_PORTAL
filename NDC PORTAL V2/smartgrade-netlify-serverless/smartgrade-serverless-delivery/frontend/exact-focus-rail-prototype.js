@@ -286,7 +286,8 @@
     .exact-breadcrumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 14px;color:#8795a6;font-size:.66rem;font-weight:600}
     .exact-breadcrumbs i{font-size:.52rem;color:#a5b1bd}
 
-    #teacher-section.sg-exact-focus-prototype .sg-ref-selected{
+    #teacher-section.sg-exact-focus-prototype .sg-ref-selected,
+    #teacher-section.sg-exact-focus-prototype .exact-legacy-selected-panel{
       display:none!important
     }
     #teacher-section.sg-exact-focus-prototype .sg-ref-selected > div{
@@ -935,6 +936,15 @@
     }
   }
 
+  function hideLegacySelectedPanel(section){
+    const name=document.getElementById('teacher-selected-class-name');
+    const card=name?.closest('.glass-card');
+    if(!card) return;
+    card.classList.add('sg-ref-selected','exact-legacy-selected-panel');
+    card.style.setProperty('display','none','important');
+    card.setAttribute('aria-hidden','true');
+  }
+
   function decorate(){
     const section=document.getElementById('teacher-section');
     if(!teacherVisible()){restoreHeader();return}
@@ -943,6 +953,7 @@
     rebuildRail(section);
     markLegacyBlocks(section);
     ensureSelectedClassCode();
+    hideLegacySelectedPanel(section);
     ensureClassStrip(section);
     ensureBreadcrumbs(section);
     ensureSummary();
