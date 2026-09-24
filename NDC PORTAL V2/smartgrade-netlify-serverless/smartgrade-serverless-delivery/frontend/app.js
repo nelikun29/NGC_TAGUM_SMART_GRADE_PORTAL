@@ -81,15 +81,77 @@ const AttendanceQr = {
 AttendanceQr.captureFromUrl();
 
 
-async function api(method, path, body) {
+const SessionGuard = {
+  authFailureHandled: false,
+  loggingOut: false,
+  controllers: new Set(),
+
+  reset() {
+    this.authFailureHandled = false;
+    this.loggingOut = false;
+  },
+
+  abortAll(except = null) {
+    for (const controller of this.controllers) {
+      if (controller !== except) {
+        try { controller.abort(); } catch {}
+      }
+    }
+  },
+
+  handleUnauthorized(message, currentController = null) {
+    if (this.loggingOut || this.authFailureHandled) return;
+
+    this.authFailureHandled = true;
+    this.abortAll(currentController);
+
+    try {
+      ApprovalManager.stopAutoRefresh();
+    } catch {}
+
+    try {
+      if (Teacher?._attendanceQrTimer) {
+        clearInterval(Teacher._attendanceQrTimer);
+        Teacher._attendanceQrTimer = null;
+      }
+    } catch {}
+
+    try {
+      Student.closeQrScanner?.();
+    } catch {}
+
+    Store.token = null;
+    Store.user = null;
+
+    try {
+      Views.renderForRole();
+      Views.authTab('login');
+    } catch {}
+
+    Toast.show(
+      'Session Ended',
+      message || 'Your session is no longer valid. Please log in again.',
+      'error'
+    );
+  }
+};
+
+
+async function api(method, path, body, options = {}) {
 
   const headers = {
     'Content-Type': 'application/json'
   };
 
-  if (Store.token) {
-    headers['Authorization'] = `Bearer ${Store.token}`;
+  const tokenAtStart = Store.token;
+  const hadToken = !!tokenAtStart;
+
+  if (tokenAtStart) {
+    headers['Authorization'] = `Bearer ${tokenAtStart}`;
   }
+
+  const controller = new AbortController();
+  SessionGuard.controllers.add(controller);
 
   let res;
 
@@ -98,18 +160,28 @@ async function api(method, path, body) {
     res = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
     });
 
   } catch (e) {
 
-    Toast.show(
-      'Connection Error',
-      'Unable to connect to the server. Please try again.',
-      'error'
-    );
+    if (e?.name === 'AbortError') {
+      throw e;
+    }
+
+    if (!options.silentErrors) {
+      Toast.show(
+        'Connection Error',
+        'Unable to connect to the server. Please try again.',
+        'error'
+      );
+    }
 
     throw e;
+
+  } finally {
+    // Removed below only after response processing when possible.
   }
 
 
@@ -124,17 +196,32 @@ async function api(method, path, body) {
 
   if (!res.ok) {
 
-    let message =
+    const message =
       (data && data.error) ||
       'An unexpected error occurred.';
+
+    const isProtectedSessionFailure =
+      res.status === 401 &&
+      hadToken &&
+      path !== '/auth/login' &&
+      !options.suppressAuthFailure;
+
+    if (isProtectedSessionFailure) {
+      SessionGuard.handleUnauthorized(message, controller);
+      SessionGuard.controllers.delete(controller);
+      throw new Error(message);
+    }
 
     const sessionEnded =
       !Store.token ||
       !Store.user;
 
     if (
-      !sessionEnded ||
-      (res.status !== 401 && res.status !== 403)
+      !options.silentErrors &&
+      (
+        !sessionEnded ||
+        (res.status !== 401 && res.status !== 403)
+      )
     ) {
       Toast.show(
         'Error',
@@ -143,10 +230,12 @@ async function api(method, path, body) {
       );
     }
 
+    SessionGuard.controllers.delete(controller);
     throw new Error(message);
   }
 
 
+  SessionGuard.controllers.delete(controller);
   return data;
 }
 
@@ -157,89 +246,82 @@ async function api(method, path, body) {
 
 const Toast = {
 
+  recentErrors: new Map(),
+
   show(title, message, type = 'info') {
+
+    const now = Date.now();
+    const fingerprint = `${title}|${message}`;
+
+    if (type === 'error') {
+      const last = this.recentErrors.get(fingerprint) || 0;
+
+      // Prevent identical API failures from stacking when several
+      // requests fail at the same time.
+      if (now - last < 3000) return;
+
+      this.recentErrors.set(fingerprint, now);
+
+      for (const [key, time] of this.recentErrors) {
+        if (now - time > 10000) this.recentErrors.delete(key);
+      }
+    }
 
     let c = document.getElementById('toast-container');
 
-    // Safety fallback
     if (!c) {
-
       c = document.createElement('div');
-
       c.id = 'toast-container';
-
       c.className =
         'fixed bottom-5 right-5 z-[9999] flex flex-col-reverse gap-3 max-w-sm';
-
       document.body.appendChild(c);
     }
 
+    if (type === 'error') {
+      const activeErrors = c.querySelectorAll('[data-toast-type="error"]');
+      if (activeErrors.length >= 2) {
+        activeErrors[0]?.remove();
+      }
+    }
 
     const el = document.createElement('div');
-
+    el.dataset.toastType = type;
 
     let bg = 'bg-slate-800 text-white';
     let icon = 'fa-circle-info text-blue-400';
 
-
     if (type === 'success') {
-
       bg = 'bg-emerald-700 text-white';
       icon = 'fa-circle-check text-emerald-300';
-
     }
-
 
     if (type === 'error') {
-
       bg = 'bg-red-700 text-white';
       icon = 'fa-circle-xmark text-red-300';
-
     }
-
 
     el.className =
       `p-4 rounded-xl shadow-2xl flex items-start gap-3
        text-xs font-semibold ${bg}
        transition-all transform translate-y-2 opacity-0`;
 
-
     el.innerHTML = `
       <i class="fa-solid ${icon} text-lg mt-0.5"></i>
-
       <div>
-        <h5 class="font-extrabold">
-          ${esc(title)}
-        </h5>
-
-        <p class="opacity-90 mt-0.5">
-          ${esc(message)}
-        </p>
+        <h5 class="font-extrabold">${esc(title)}</h5>
+        <p class="opacity-90 mt-0.5">${esc(message)}</p>
       </div>
     `;
 
-
     c.appendChild(el);
 
-
     requestAnimationFrame(() => {
-
-      el.classList.remove(
-        'translate-y-2',
-        'opacity-0'
-      );
-
+      el.classList.remove('translate-y-2', 'opacity-0');
     });
 
-
     setTimeout(() => {
-
       el.classList.add('opacity-0');
-
-      setTimeout(() => {
-        el.remove();
-      }, 300);
-
+      setTimeout(() => el.remove(), 300);
     }, 4000);
   }
 
@@ -589,6 +671,8 @@ const ApprovalManager = {
 
         for (const cls of classes) {
 
+          if (!Store.token || !Store.user) break;
+
           try {
 
             const rows =
@@ -900,6 +984,7 @@ const Auth = {
       Store.user =
         data.user;
 
+      SessionGuard.reset();
       ApprovalManager.startAutoRefresh();
 
 
@@ -915,15 +1000,6 @@ const Auth = {
       if (data.user.role === 'student' && data.user.accountVerificationStatus === 'verified') {
         setTimeout(() => AttendanceQr.submitPending(), 250);
       }
-
-
-      // Immediately refresh notifications.
-
-      setTimeout(() => {
-
-        ApprovalManager.forceRefresh();
-
-      }, 200);
 
 
     } catch {
@@ -1051,28 +1127,45 @@ const Auth = {
 
   logout() {
 
+    SessionGuard.loggingOut = true;
     ApprovalManager.stopAutoRefresh();
+    SessionGuard.abortAll();
 
     if (Teacher?._attendanceQrTimer) {
       clearInterval(Teacher._attendanceQrTimer);
       Teacher._attendanceQrTimer = null;
     }
 
+    try {
+      Student.closeQrScanner?.();
+    } catch {}
+
     api(
       'POST',
-      '/auth/logout'
+      '/auth/logout',
+      undefined,
+      {
+        suppressAuthFailure: true,
+        silentErrors: true
+      }
     ).catch(() => {});
 
     Store.token = null;
     Store.user = null;
 
     Views.renderForRole();
+    Views.authTab('login');
 
     Toast.show(
       'Logged Out',
       'You have been logged out successfully.',
       'success'
     );
+
+    setTimeout(() => {
+      SessionGuard.loggingOut = false;
+      SessionGuard.authFailureHandled = false;
+    }, 750);
 
   }
 
@@ -1402,8 +1495,8 @@ document.addEventListener(
           studentIdClaim: session.studentIdClaim || null
         };
       } catch {
-        // Preserve the cached shell during a temporary connection failure;
-        // protected APIs still enforce the live verification status.
+        // api() now clears invalid/expired authenticated sessions on 401.
+        // Temporary connection failures may still preserve the cached shell.
       }
     }
 
