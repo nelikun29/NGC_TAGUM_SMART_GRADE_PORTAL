@@ -1,0 +1,27 @@
+[build]
+  base = "NDC PORTAL V2/smartgrade-netlify-serverless/smartgrade-serverless-delivery"
+  publish = "frontend"
+  functions = "netlify/functions"
+
+[context.deploy-preview]
+  ignore = "exit 1"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
