@@ -372,55 +372,6 @@ function val(id) {
 
 
 // ============================================================
-// LAZY EXTERNAL LIBRARIES
-// ============================================================
-
-const ExternalScripts = {
-  promises: new Map(),
-
-  load(src, testFn) {
-    if (typeof testFn === 'function' && testFn()) return Promise.resolve(true);
-    if (this.promises.has(src)) return this.promises.get(src);
-
-    const promise = new Promise((resolve, reject) => {
-      const existing = document.querySelector(`script[data-lazy-src="${src}"]`);
-      if (existing) {
-        existing.addEventListener('load', () => resolve(true), { once: true });
-        existing.addEventListener('error', reject, { once: true });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.dataset.lazySrc = src;
-      script.referrerPolicy = 'no-referrer';
-      script.onload = () => resolve(true);
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-
-    this.promises.set(src, promise);
-    return promise;
-  },
-
-  loadQrScanner() {
-    return this.load(
-      'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
-      () => typeof jsQR !== 'undefined'
-    );
-  },
-
-  loadQrRenderer() {
-    return this.load(
-      'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
-      () => typeof QRCode !== 'undefined'
-    );
-  }
-};
-
-
-// ============================================================
 // APPROVAL NOTIFICATION SYSTEM
 // ============================================================
 
@@ -2132,19 +2083,10 @@ const Student = {
       Toast.show('Camera Unavailable', 'This browser does not support camera scanning. You can still enter the Attendance Code.', 'error');
       return;
     }
-
-    try {
-      await ExternalScripts.loadQrScanner();
-    } catch {
+    if (typeof jsQR === 'undefined') {
       Toast.show('Scanner Unavailable', 'QR scanner failed to load. You can still enter the Attendance Code.', 'error');
       return;
     }
-
-    if (typeof jsQR === 'undefined') {
-      Toast.show('Scanner Unavailable', 'QR scanner failed to initialize. You can still enter the Attendance Code.', 'error');
-      return;
-    }
-
     Student.closeQrScanner();
     const host = document.createElement('div');
     host.id = 'student-qr-scanner-modal';
@@ -5544,19 +5486,6 @@ ${esc(
   async showAttendanceQr(sessionId) {
     const panel = document.getElementById('attendance-qr-panel');
     if (!panel) return;
-
-    try {
-      await ExternalScripts.loadQrRenderer();
-    } catch {
-      Toast.show('QR unavailable','QR renderer failed to load. Attendance Code remains available.','error');
-      return;
-    }
-
-    if (typeof QRCode === 'undefined') {
-      Toast.show('QR unavailable','QR renderer failed to initialize. Attendance Code remains available.','error');
-      return;
-    }
-
     panel.classList.remove('hidden');
     if (Teacher._attendanceQrTimer) clearInterval(Teacher._attendanceQrTimer);
     const refresh = async () => {
