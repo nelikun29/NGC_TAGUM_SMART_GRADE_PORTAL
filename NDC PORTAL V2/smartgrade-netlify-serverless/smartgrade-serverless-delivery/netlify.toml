@@ -15,3 +15,21 @@
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
+
+
+# Always revalidate the application shell and JavaScript so a newly published
+# production deploy cannot keep an older Admin renderer in the browser cache.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"

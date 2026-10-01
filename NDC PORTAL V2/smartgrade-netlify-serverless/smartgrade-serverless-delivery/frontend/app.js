@@ -81,15 +81,77 @@ const AttendanceQr = {
 AttendanceQr.captureFromUrl();
 
 
-async function api(method, path, body) {
+const SessionGuard = {
+  authFailureHandled: false,
+  loggingOut: false,
+  controllers: new Set(),
+
+  reset() {
+    this.authFailureHandled = false;
+    this.loggingOut = false;
+  },
+
+  abortAll(except = null) {
+    for (const controller of this.controllers) {
+      if (controller !== except) {
+        try { controller.abort(); } catch {}
+      }
+    }
+  },
+
+  handleUnauthorized(message, currentController = null) {
+    if (this.loggingOut || this.authFailureHandled) return;
+
+    this.authFailureHandled = true;
+    this.abortAll(currentController);
+
+    try {
+      ApprovalManager.stopAutoRefresh();
+    } catch {}
+
+    try {
+      if (Teacher?._attendanceQrTimer) {
+        clearInterval(Teacher._attendanceQrTimer);
+        Teacher._attendanceQrTimer = null;
+      }
+    } catch {}
+
+    try {
+      Student.closeQrScanner?.();
+    } catch {}
+
+    Store.token = null;
+    Store.user = null;
+
+    try {
+      Views.renderForRole();
+      Views.authTab('login');
+    } catch {}
+
+    Toast.show(
+      'Session Ended',
+      message || 'Your session is no longer valid. Please log in again.',
+      'error'
+    );
+  }
+};
+
+
+async function api(method, path, body, options = {}) {
 
   const headers = {
     'Content-Type': 'application/json'
   };
 
-  if (Store.token) {
-    headers['Authorization'] = `Bearer ${Store.token}`;
+  const tokenAtStart = Store.token;
+  const hadToken = !!tokenAtStart;
+
+  if (tokenAtStart) {
+    headers['Authorization'] = `Bearer ${tokenAtStart}`;
   }
+
+  const controller = new AbortController();
+  SessionGuard.controllers.add(controller);
 
   let res;
 
@@ -98,18 +160,28 @@ async function api(method, path, body) {
     res = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
     });
 
   } catch (e) {
 
-    Toast.show(
-      'Connection Error',
-      'Unable to connect to the server. Please try again.',
-      'error'
-    );
+    if (e?.name === 'AbortError') {
+      throw e;
+    }
+
+    if (!options.silentErrors) {
+      Toast.show(
+        'Connection Error',
+        'Unable to connect to the server. Please try again.',
+        'error'
+      );
+    }
 
     throw e;
+
+  } finally {
+    // Removed below only after response processing when possible.
   }
 
 
@@ -124,20 +196,46 @@ async function api(method, path, body) {
 
   if (!res.ok) {
 
-    let message =
+    const message =
       (data && data.error) ||
       'An unexpected error occurred.';
 
-    Toast.show(
-      'Error',
-      message,
-      'error'
-    );
+    const isProtectedSessionFailure =
+      res.status === 401 &&
+      hadToken &&
+      path !== '/auth/login' &&
+      !options.suppressAuthFailure;
 
+    if (isProtectedSessionFailure) {
+      SessionGuard.handleUnauthorized(message, controller);
+      SessionGuard.controllers.delete(controller);
+      throw new Error(message);
+    }
+
+    const sessionEnded =
+      !Store.token ||
+      !Store.user;
+
+    if (
+      !options.silentErrors &&
+      (
+        !sessionEnded ||
+        (res.status !== 401 && res.status !== 403)
+      )
+    ) {
+      Toast.show(
+        'Error',
+        message,
+        'error'
+      );
+    }
+
+    SessionGuard.controllers.delete(controller);
     throw new Error(message);
   }
 
 
+  SessionGuard.controllers.delete(controller);
   return data;
 }
 
@@ -148,89 +246,82 @@ async function api(method, path, body) {
 
 const Toast = {
 
+  recentErrors: new Map(),
+
   show(title, message, type = 'info') {
+
+    const now = Date.now();
+    const fingerprint = `${title}|${message}`;
+
+    if (type === 'error') {
+      const last = this.recentErrors.get(fingerprint) || 0;
+
+      // Prevent identical API failures from stacking when several
+      // requests fail at the same time.
+      if (now - last < 3000) return;
+
+      this.recentErrors.set(fingerprint, now);
+
+      for (const [key, time] of this.recentErrors) {
+        if (now - time > 10000) this.recentErrors.delete(key);
+      }
+    }
 
     let c = document.getElementById('toast-container');
 
-    // Safety fallback
     if (!c) {
-
       c = document.createElement('div');
-
       c.id = 'toast-container';
-
       c.className =
-        'fixed top-5 right-5 z-[9999] space-y-3 max-w-sm';
-
+        'fixed bottom-5 right-5 z-[9999] flex flex-col-reverse gap-3 max-w-sm';
       document.body.appendChild(c);
     }
 
+    if (type === 'error') {
+      const activeErrors = c.querySelectorAll('[data-toast-type="error"]');
+      if (activeErrors.length >= 2) {
+        activeErrors[0]?.remove();
+      }
+    }
 
     const el = document.createElement('div');
-
+    el.dataset.toastType = type;
 
     let bg = 'bg-slate-800 text-white';
     let icon = 'fa-circle-info text-blue-400';
 
-
     if (type === 'success') {
-
       bg = 'bg-emerald-700 text-white';
       icon = 'fa-circle-check text-emerald-300';
-
     }
-
 
     if (type === 'error') {
-
       bg = 'bg-red-700 text-white';
       icon = 'fa-circle-xmark text-red-300';
-
     }
-
 
     el.className =
       `p-4 rounded-xl shadow-2xl flex items-start gap-3
        text-xs font-semibold ${bg}
        transition-all transform translate-y-2 opacity-0`;
 
-
     el.innerHTML = `
       <i class="fa-solid ${icon} text-lg mt-0.5"></i>
-
       <div>
-        <h5 class="font-extrabold">
-          ${esc(title)}
-        </h5>
-
-        <p class="opacity-90 mt-0.5">
-          ${esc(message)}
-        </p>
+        <h5 class="font-extrabold">${esc(title)}</h5>
+        <p class="opacity-90 mt-0.5">${esc(message)}</p>
       </div>
     `;
 
-
     c.appendChild(el);
 
-
     requestAnimationFrame(() => {
-
-      el.classList.remove(
-        'translate-y-2',
-        'opacity-0'
-      );
-
+      el.classList.remove('translate-y-2', 'opacity-0');
     });
 
-
     setTimeout(() => {
-
       el.classList.add('opacity-0');
-
-      setTimeout(() => {
-        el.remove();
-      }, 300);
-
+      setTimeout(() => el.remove(), 300);
     }, 4000);
   }
 
@@ -296,7 +387,15 @@ const ApprovalManager = {
 
     loading: false,
 
-    timer: null
+    timer: null,
+
+    lastRefreshedAt: 0,
+
+    refreshIntervalMs: 300000,
+
+    staleAfterMs: 300000,
+
+    visibilityHandlerBound: false
 
   },
 
@@ -575,30 +674,18 @@ const ApprovalManager = {
           ).catch(() => []);
 
 
-        let total = 0;
+        // /classes already includes pending_count for each teacher-owned
+        // class, so sum those values locally. This avoids the previous N+1
+        // pattern of one extra pending-enrollments request per class.
 
-
-        for (const cls of classes) {
-
-          try {
-
-            const rows =
-              await api(
-                'GET',
-                `/classes/${cls.id}/pending-enrollments`
-              );
-
-
-            total +=
-              Array.isArray(rows)
-                ? rows.length
-                : 0;
-
-          } catch {
-            // Ignore individual class errors.
-          }
-
-        }
+        const total =
+          Array.isArray(classes)
+            ? classes.reduce(
+                (sum, cls) =>
+                  sum + Number(cls.pending_count || 0),
+                0
+              )
+            : 0;
 
 
         this.state.teacherPending =
@@ -642,6 +729,8 @@ const ApprovalManager = {
     } finally {
 
       this.state.loading = false;
+
+      this.state.lastRefreshedAt = Date.now();
 
     }
 
@@ -794,21 +883,80 @@ const ApprovalManager = {
     }
 
 
-    // Refresh every 30 seconds.
+    // Conserve Neon compute: refresh approvals every 5 minutes only while
+    // the page is visible. Important user actions still call forceRefresh().
 
     this.state.timer =
       setInterval(
         () => {
 
-          if (Store.user) {
+          if (Store.user && document.visibilityState === 'visible') {
 
             this.refresh();
 
           }
 
         },
-        30000
+        this.state.refreshIntervalMs
       );
+
+
+    // When the user returns to the tab, refresh only if the notification
+    // data is stale instead of continuously polling in the background.
+
+    if (!this.state.visibilityHandlerBound) {
+
+      document.addEventListener('visibilitychange', () => {
+
+        if (
+          document.visibilityState === 'visible' &&
+          Store.user &&
+          Date.now() - this.state.lastRefreshedAt >= this.state.staleAfterMs
+        ) {
+
+          this.refresh();
+
+        }
+
+      });
+
+      window.addEventListener('focus', () => {
+
+        if (
+          Store.user &&
+          Date.now() - this.state.lastRefreshedAt >= this.state.staleAfterMs
+        ) {
+
+          this.refresh();
+
+        }
+
+      });
+
+      this.state.visibilityHandlerBound = true;
+
+    }
+
+  },
+
+
+  // ----------------------------------------------------------
+  // STOP AUTOMATIC REFRESH
+  // ----------------------------------------------------------
+
+  stopAutoRefresh() {
+
+    if (this.state.timer) {
+      clearInterval(this.state.timer);
+      this.state.timer = null;
+    }
+
+    this.state.loading = false;
+    this.state.adminPending = 0;
+    this.state.teacherPending = 0;
+    this.state.unfinalizePending = 0;
+    this.updateBadge(0);
+    this.updateTitle(0);
 
   },
 
@@ -870,6 +1018,9 @@ const Auth = {
       Store.user =
         data.user;
 
+      SessionGuard.reset();
+      ApprovalManager.startAutoRefresh();
+
 
       Toast.show(
         'Welcome',
@@ -880,16 +1031,9 @@ const Auth = {
 
       Views.renderForRole();
 
-      if (data.user.role === 'student') setTimeout(() => AttendanceQr.submitPending(), 250);
-
-
-      // Immediately refresh notifications.
-
-      setTimeout(() => {
-
-        ApprovalManager.forceRefresh();
-
-      }, 200);
+      if (data.user.role === 'student' && data.user.accountVerificationStatus === 'verified') {
+        setTimeout(() => AttendanceQr.submitPending(), 250);
+      }
 
 
     } catch {
@@ -1017,21 +1161,45 @@ const Auth = {
 
   logout() {
 
+    SessionGuard.loggingOut = true;
+    ApprovalManager.stopAutoRefresh();
+    SessionGuard.abortAll();
+
+    if (Teacher?._attendanceQrTimer) {
+      clearInterval(Teacher._attendanceQrTimer);
+      Teacher._attendanceQrTimer = null;
+    }
+
+    try {
+      Student.closeQrScanner?.();
+    } catch {}
+
     api(
       'POST',
-      '/auth/logout'
+      '/auth/logout',
+      undefined,
+      {
+        suppressAuthFailure: true,
+        silentErrors: true
+      }
     ).catch(() => {});
 
-
     Store.token = null;
-
     Store.user = null;
 
-
-    ApprovalManager.refresh();
-
-
     Views.renderForRole();
+    Views.authTab('login');
+
+    Toast.show(
+      'Logged Out',
+      'You have been logged out successfully.',
+      'success'
+    );
+
+    setTimeout(() => {
+      SessionGuard.loggingOut = false;
+      SessionGuard.authFailureHandled = false;
+    }, 750);
 
   }
 
@@ -1236,6 +1404,37 @@ const Views = {
 
     }
 
+    if (
+      user.role === 'student' &&
+      user.accountVerificationStatus &&
+      user.accountVerificationStatus !== 'verified'
+    ) {
+      const el = document.getElementById('student-section');
+      if (el) {
+        el.classList.remove('hidden');
+        el.innerHTML = `
+          <div class="mx-auto max-w-2xl glass-card rounded-3xl p-7 text-center">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+              <i class="fa-solid fa-user-shield text-2xl"></i>
+            </div>
+            <h2 class="mt-4 text-2xl font-black text-slate-900">Account Verification Pending</h2>
+            <p class="mt-3 text-sm leading-6 text-slate-600">
+              Another learner record has the same full name. Your registration was not deleted or rejected,
+              but academic access is temporarily restricted while an administrator verifies the accounts.
+            </p>
+            <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900">
+              <p><b>Status:</b> ${esc(String(user.accountVerificationStatus).replaceAll('_',' '))}</p>
+              <p class="mt-1"><b>${user.studentIdClaim ? 'Claimed Student ID' : 'Student ID'}:</b> ${esc(user.studentIdClaim?.claimed_student_number || user.profile?.student_number || '—')}</p>
+              <p class="mt-1"><b>Email:</b> ${esc(user.email || '—')}</p>
+              ${user.verificationNote ? `<p class="mt-1"><b>Note:</b> ${esc(user.verificationNote)}</p>` : ''}
+            </div>
+            <p class="mt-4 text-xs text-slate-500">You may sign out normally. Enrollment, attendance, assessments, and grades remain protected until verification is completed.</p>
+          </div>`;
+      }
+      ApprovalManager.updateBadge(0);
+      return;
+    }
+
 
     if (
       user.role === 'student'
@@ -1318,7 +1517,22 @@ const Views = {
 
 document.addEventListener(
   'DOMContentLoaded',
-  () => {
+  async () => {
+
+    if (Store.token && Store.user) {
+      try {
+        const session = await api('GET', '/auth/me');
+        Store.user = {
+          ...Store.user,
+          ...session.user,
+          profile: session.profile || Store.user.profile || null,
+          studentIdClaim: session.studentIdClaim || null
+        };
+      } catch {
+        // api() now clears invalid/expired authenticated sessions on 401.
+        // Temporary connection failures may still preserve the cached shell.
+      }
+    }
 
     Views.renderForRole();
 
@@ -1567,7 +1781,9 @@ const Student = {
 
           </h3>
 
-          ${gradesHtml}
+          <div class="student-class-card-grid">
+            ${gradesHtml}
+          </div>
 
         </div>
 
@@ -1594,6 +1810,7 @@ const Student = {
           <label class="text-xs font-bold text-slate-600">Middle Name<input id="student-profile-middle" value="${esc(p.middle_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
           <label class="text-xs font-bold text-slate-600">Last Name<input id="student-profile-last" required value="${esc(p.last_name || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
           <label class="text-xs font-bold text-slate-600">Year Level<input id="student-profile-year" required value="${esc(p.year_level || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
+          <label class="text-xs font-bold text-slate-600 sm:col-span-2">Email Address<input id="student-profile-email" type="email" required value="${esc(Store.user?.email || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"><span class="block mt-1 text-[10px] font-medium text-slate-400">Use an active email address. This is where password-reset links will be sent.</span></label>
           <label class="text-xs font-bold text-slate-600 sm:col-span-2">Room<input id="student-profile-room" value="${esc(p.room_number || '')}" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></label>
           <div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" onclick="Student.closeEditProfile()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold">Cancel</button><button type="submit" class="px-4 py-2 rounded-xl bg-eduBlue-600 text-white text-sm font-bold"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Changes</button></div>
         </form>
@@ -1613,15 +1830,22 @@ const Student = {
         middleName: val('student-profile-middle'),
         lastName: val('student-profile-last'),
         yearLevel: val('student-profile-year'),
-        roomNumber: val('student-profile-room')
+        roomNumber: val('student-profile-room'),
+        email: val('student-profile-email')
       });
       // Store.user is a localStorage-backed getter. Mutating the returned
       // object does not persist it, so write the complete user object back.
       const currentUser = Store.user || {};
-      Store.user = { ...currentUser, profile: data.profile };
+      Store.user = {
+        ...currentUser,
+        email: data.email || currentUser.email,
+        profile: data.profile,
+        accountVerificationStatus: data.accountVerificationStatus || currentUser.accountVerificationStatus || 'verified',
+        verificationNote: data.verificationNote || null
+      };
       Student.closeEditProfile();
       Toast.show('Profile Updated', data.message || 'Your profile was updated successfully.', 'success');
-      await Student.render();
+      Views.renderForRole();
     } catch {}
     return false;
   },
@@ -2334,139 +2558,8 @@ const Teacher = {
 
             ? `
 
-              <!-- ==========================================
-                   SELECTED CLASS
-              =========================================== -->
-
-              <div
-                class="glass-card
-                       rounded-2xl
-                       p-4
-                       md:p-5"
-              >
-
-                <div
-                  class="flex
-                         flex-col
-                         lg:flex-row
-                         lg:items-center
-                         lg:justify-between
-                         gap-4"
-                >
-
-                  <div>
-
-                    <p
-                      class="text-xs
-                             uppercase
-                             tracking-wider
-                             font-bold
-                             text-slate-400
-                             mb-1"
-                    >
-
-                      Selected Class
-
-                    </p>
-
-
-                    <h3
-                      id="teacher-selected-class-name"
-                      class="text-lg
-                             font-black
-                             text-slate-800"
-                    >
-
-                      ${esc(
-                        Teacher.getSelectedClass()?.subject ||
-                        'Select a class'
-                      )}
-
-                    </h3>
-
-
-                    <p
-                      id="teacher-selected-class-meta"
-                      class="text-xs
-                             text-slate-500
-                             mt-1"
-                    >
-
-                      ${Teacher.getSelectedClass()
-                        ? `${esc(Teacher.getSelectedClass().year_level || '')} • ${esc(Teacher.getSelectedClass().section || '')}`
-                        : ''}
-
-                    </p>
-
-                  </div>
-
-
-                  <div
-                    class="flex
-                           flex-wrap
-                           items-center
-                           gap-2"
-                  >
-
-                    <label
-                      for="teacher-class-select"
-                      class="text-xs
-                             font-semibold
-                             text-slate-500"
-                    >
-
-                      Quick Select
-
-                    </label>
-
-
-                    <select
-                      id="teacher-class-select"
-                      onchange="Teacher.selectClass(this.value)"
-                      class="px-3
-                             py-2
-                             rounded-xl
-                             border
-                             border-slate-300
-                             bg-white
-                             text-sm
-                             font-semibold
-                             outline-none
-                             focus:ring-2
-                             focus:ring-eduBlue-300"
-                    >
-
-                      ${Teacher._classes
-                        .map(
-                          c => `
-
-                            <option
-                              value="${esc(c.id)}"
-                              ${
-                                String(c.id) ===
-                                String(Teacher.state.classId)
-                                  ? 'selected'
-                                  : ''
-                              }
-                            >
-
-                              ${esc(c.subject)}
-                              —
-                              ${esc(c.section)}
-
-                            </option>
-
-                          `
-                        )
-                        .join('')}
-
-                    </select>
-
-                  </div>
-
-                </div>
-
-              </div>
+              <!-- Legacy Selected Class panel removed.
+                   Class selection is provided by the My Classes toolbar. -->
 
 
               <!-- ==========================================
@@ -5907,6 +6000,28 @@ ${esc(
         `/classes/${Teacher.state.classId}/roster`
       ).catch(() => []);
 
+    const scoreEndpoint =
+      kind === 'quizzes'
+        ? `/assessments/quizzes/${itemId}/scores`
+        : kind === 'performance'
+          ? `/assessments/performance-tasks/${itemId}/scores`
+          : `/assessments/exams/${itemId}/scores`;
+
+    const scoreData =
+      await api(
+        'GET',
+        scoreEndpoint
+      ).catch(() => ({ maxScore: null, scores: [] }));
+
+    const maxScore =
+      scoreData?.maxScore ?? null;
+
+    const savedScores =
+      new Map(
+        (Array.isArray(scoreData?.scores) ? scoreData.scores : [])
+          .map(row => [String(row.student_id), row.raw_score])
+      );
+
 
     box.innerHTML = `
 
@@ -5956,7 +6071,17 @@ ${esc(
               Array.isArray(roster)
                 ? roster
                     .map(
-                      s => `
+                      s => {
+                        const existingScore =
+                          savedScores.has(String(s.id))
+                            ? savedScores.get(String(s.id))
+                            : null;
+
+                        const hasSaved =
+                          existingScore !== null &&
+                          existingScore !== undefined;
+
+                        return `
 
                         <div
                           class="flex
@@ -5996,7 +6121,10 @@ ${esc(
                               id="score-${esc(itemId)}-${esc(s.id)}"
                               type="number"
                               step="any"
-                              placeholder="Score"
+                              ${maxScore !== null ? `min="0" max="${esc(maxScore)}"` : ''}
+                              value="${hasSaved ? esc(existingScore) : ''}"
+                              placeholder="${maxScore !== null ? '0 - ' + esc(maxScore) : 'Score'}"
+                              oninput="Teacher.markScoreDirty('${esc(itemId)}', '${esc(s.id)}')"
                               class="w-28
                                      px-2
                                      py-2
@@ -6005,10 +6133,16 @@ ${esc(
                                      border-slate-300"
                             >
 
+                            ${maxScore !== null
+                              ? `<span class="self-center text-sm font-bold text-slate-500">/ ${esc(maxScore)}</span>`
+                              : ''}
+
 
                             <button
+                              id="score-save-${esc(itemId)}-${esc(s.id)}"
+                              data-saved-value="${hasSaved ? esc(existingScore) : ''}"
                               onclick="Teacher.saveScore('${kind}', '${esc(itemId)}', '${esc(s.id)}')"
-                              class="bg-eduBlue-600
+                              class="${hasSaved ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-eduBlue-600 hover:bg-eduBlue-700'}
                                      text-white
                                      px-3
                                      py-2
@@ -6017,7 +6151,7 @@ ${esc(
                                      font-bold"
                             >
 
-                              Save
+                              ${hasSaved ? 'Saved' : 'Save'}
 
                             </button>
 
@@ -6025,7 +6159,8 @@ ${esc(
 
                         </div>
 
-                      `
+                      `;
+                      }
                     )
                     .join('')
                 : ''
@@ -6038,6 +6173,56 @@ ${esc(
       </div>
 
     `;
+
+  },
+
+
+  markScoreDirty(
+    itemId,
+    studentId
+  ) {
+
+    const input =
+      document.getElementById(
+        `score-${itemId}-${studentId}`
+      );
+
+    const button =
+      document.getElementById(
+        `score-save-${itemId}-${studentId}`
+      );
+
+    if (!input || !button) return;
+
+    const saved =
+      button.dataset.savedValue;
+
+    const unchanged =
+      saved !== '' &&
+      input.value !== '' &&
+      Number(saved) === Number(input.value);
+
+    button.textContent =
+      unchanged
+        ? 'Saved'
+        : 'Save';
+
+    button.classList.toggle(
+      'bg-emerald-600',
+      unchanged
+    );
+    button.classList.toggle(
+      'hover:bg-emerald-700',
+      unchanged
+    );
+    button.classList.toggle(
+      'bg-eduBlue-600',
+      !unchanged
+    );
+    button.classList.toggle(
+      'hover:bg-eduBlue-700',
+      !unchanged
+    );
 
   },
 
@@ -6096,6 +6281,20 @@ ${esc(
         }
       );
 
+
+      const button =
+        document.getElementById(
+          `score-save-${itemId}-${studentId}`
+        );
+
+      if (button) {
+        button.dataset.savedValue =
+          String(rawScore);
+        Teacher.markScoreDirty(
+          itemId,
+          studentId
+        );
+      }
 
       Toast.show(
         'Saved',
@@ -7127,44 +7326,35 @@ const Admin = {
                     u.approval_status
                   )}
 
+                  ${u.locked_until
+                    ? '<span class="ml-1 text-amber-700 font-bold">· Locked</span>'
+                    : ''}
+
                 </td>
 
 
                 <td>
 
-                  ${
-                    u.is_active
+                  <div class="flex flex-wrap gap-3">
+                    <button
+                      onclick="Admin.resetPassword('${u.id}', '${esc(u.email)}')"
+                      class="text-xs font-bold text-blue-600"
+                    >
+                      Reset Password
+                    </button>
 
-                      ? `
+                    ${
+                      (u.locked_until || Number(u.failed_login_attempts || 0) > 0)
+                        ? `<button onclick="Admin.unlockAccount('${u.id}')" class="text-xs font-bold text-amber-700">Unlock Account</button>`
+                        : ''
+                    }
 
-                        <button
-                          onclick="Admin.deactivate('${u.id}')"
-                          class="text-xs
-                                 font-bold
-                                 text-red-600"
-                        >
-
-                          Deactivate
-
-                        </button>
-
-                      `
-
-                      : `
-
-                        <button
-                          onclick="Admin.reactivate('${u.id}')"
-                          class="text-xs
-                                 font-bold
-                                 text-emerald-600"
-                        >
-
-                          Reactivate
-
-                        </button>
-
-                      `
-                  }
+                    ${
+                      u.is_active
+                        ? `<button onclick="Admin.deactivate('${u.id}')" class="text-xs font-bold text-red-600">Deactivate</button>`
+                        : `<button onclick="Admin.reactivate('${u.id}')" class="text-xs font-bold text-emerald-600">Reactivate</button>`
+                    }
+                  </div>
 
                 </td>
 
@@ -7179,6 +7369,38 @@ const Admin = {
       </div>
 
     `;
+
+  },
+
+
+  async resetPassword(id, email) {
+    const m = document.createElement('div');
+    m.className = 'fixed inset-0 z-[160] flex items-center justify-center p-4';
+    m.innerHTML = `<div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" data-close></div><div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-5"><h3 class="text-lg font-black text-slate-800">Reset Password</h3><p class="text-sm text-slate-500 mt-1">Account: ${esc(email || '')}</p><form class="mt-4 space-y-3"><input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="New password (minimum 8 characters)" class="w-full px-3 py-3 rounded-xl border border-slate-300 text-sm"><input name="confirm" type="password" autocomplete="new-password" minlength="8" required placeholder="Confirm new password" class="w-full px-3 py-3 rounded-xl border border-slate-300 text-sm"><div class="flex gap-2"><button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">Reset Password</button><button type="button" data-close class="px-4 py-3 text-sm font-bold text-slate-500">Cancel</button></div></form></div>`;
+    document.body.appendChild(m);
+    const close=()=>m.remove();m.querySelectorAll('[data-close]').forEach(x=>x.onclick=close);
+    m.querySelector('form').onsubmit=async e=>{e.preventDefault();const p=e.target.password.value;const confirm=e.target.confirm.value;if(p.length<8){Toast.show('Invalid Password','Password must be at least 8 characters.','error');return;}if(p!==confirm){Toast.show('Passwords Do Not Match','Please enter the same password twice.','error');return;}try{await api('POST',`/admin/users/${id}/reset-password`,{newPassword:p});Toast.show('Password Reset','Password updated and login lock cleared.','success');close();}catch{}};
+  },
+
+
+  async unlockAccount(id) {
+
+    try {
+
+      await api(
+        'POST',
+        `/admin/users/${id}/unlock`
+      );
+
+      Toast.show(
+        'Account Unlocked',
+        'Login restriction cleared. The existing password is unchanged.',
+        'success'
+      );
+
+      Admin.renderUsers();
+
+    } catch {}
 
   },
 

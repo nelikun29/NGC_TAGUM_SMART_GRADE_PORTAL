@@ -25,18 +25,44 @@ async function authenticate(req, res, next) {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, role, email, is_active, approval_status FROM users WHERE id = $1`,
+      `SELECT id, role, email, is_active, approval_status,
+              account_verification_status, verification_note
+       FROM users WHERE id = $1`,
       [payload.sub]
     );
     const user = rows[0];
     if (!user || !user.is_active || user.approval_status !== 'approved') {
       return res.status(401).json({ error: 'Account is not active. Please contact an administrator.' });
     }
-    req.user = { id: user.id, role: user.role, email: user.email };
+    req.user = {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+      accountVerificationStatus: user.account_verification_status || 'verified',
+      verificationNote: user.verification_note || null
+    };
     next();
   } catch (e) {
     next(e);
   }
+}
+
+/**
+ * Restricts every academic/API route while a possible duplicate is under
+ * review. Authentication, /auth/me, and logout remain available so the user
+ * sees a clear status instead of being mistaken for an invalid login.
+ */
+function requireVerifiedAccount(req, res, next) {
+  return authenticate(req, res, () => {
+    if (req.user.accountVerificationStatus !== 'verified') {
+      return res.status(403).json({
+        error: 'Academic access is restricted while this account is under identity verification.',
+        code: 'ACCOUNT_VERIFICATION_REQUIRED',
+        verificationStatus: req.user.accountVerificationStatus
+      });
+    }
+    next();
+  });
 }
 
 /** Restrict a route to one or more roles. */
@@ -80,4 +106,4 @@ function requireSelfStudent(req, res, next) {
   next();
 }
 
-module.exports = { authenticate, requireRole, requireClassOwnership, requireSelfStudent, JWT_SECRET };
+module.exports = { authenticate, requireVerifiedAccount, requireRole, requireClassOwnership, requireSelfStudent, JWT_SECRET };
