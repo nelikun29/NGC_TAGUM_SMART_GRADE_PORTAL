@@ -674,32 +674,18 @@ const ApprovalManager = {
           ).catch(() => []);
 
 
-        let total = 0;
+        // /classes already includes pending_count for each teacher-owned
+        // class, so sum those values locally. This avoids the previous N+1
+        // pattern of one extra pending-enrollments request per class.
 
-
-        for (const cls of classes) {
-
-          if (!Store.token || !Store.user) break;
-
-          try {
-
-            const rows =
-              await api(
-                'GET',
-                `/classes/${cls.id}/pending-enrollments`
-              );
-
-
-            total +=
-              Array.isArray(rows)
-                ? rows.length
-                : 0;
-
-          } catch {
-            // Ignore individual class errors.
-          }
-
-        }
+        const total =
+          Array.isArray(classes)
+            ? classes.reduce(
+                (sum, cls) =>
+                  sum + Number(cls.pending_count || 0),
+                0
+              )
+            : 0;
 
 
         this.state.teacherPending =
