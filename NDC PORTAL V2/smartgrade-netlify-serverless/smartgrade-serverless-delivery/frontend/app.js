@@ -387,7 +387,15 @@ const ApprovalManager = {
 
     loading: false,
 
-    timer: null
+    timer: null,
+
+    lastRefreshedAt: 0,
+
+    refreshIntervalMs: 300000,
+
+    staleAfterMs: 300000,
+
+    visibilityHandlerBound: false
 
   },
 
@@ -736,6 +744,8 @@ const ApprovalManager = {
 
       this.state.loading = false;
 
+      this.state.lastRefreshedAt = Date.now();
+
     }
 
   },
@@ -887,21 +897,59 @@ const ApprovalManager = {
     }
 
 
-    // Refresh every 30 seconds.
+    // Conserve Neon compute: refresh approvals every 5 minutes only while
+    // the page is visible. Important user actions still call forceRefresh().
 
     this.state.timer =
       setInterval(
         () => {
 
-          if (Store.user) {
+          if (Store.user && document.visibilityState === 'visible') {
 
             this.refresh();
 
           }
 
         },
-        30000
+        this.state.refreshIntervalMs
       );
+
+
+    // When the user returns to the tab, refresh only if the notification
+    // data is stale instead of continuously polling in the background.
+
+    if (!this.state.visibilityHandlerBound) {
+
+      document.addEventListener('visibilitychange', () => {
+
+        if (
+          document.visibilityState === 'visible' &&
+          Store.user &&
+          Date.now() - this.state.lastRefreshedAt >= this.state.staleAfterMs
+        ) {
+
+          this.refresh();
+
+        }
+
+      });
+
+      window.addEventListener('focus', () => {
+
+        if (
+          Store.user &&
+          Date.now() - this.state.lastRefreshedAt >= this.state.staleAfterMs
+        ) {
+
+          this.refresh();
+
+        }
+
+      });
+
+      this.state.visibilityHandlerBound = true;
+
+    }
 
   },
 
