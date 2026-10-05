@@ -18,8 +18,12 @@ function requireStudentRole(req,res,next){
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
+function hashDeviceToken(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
 function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // ---------- STUDENT REGISTRATION ----------
@@ -409,7 +413,7 @@ router.post('/reset-password', async (req,res,next)=>{
 
     const hash=bcrypt.hashSync(newPassword,12);
     await client.query(
-      'UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$2',
+      'UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,active_device_hash=NULL,active_device_bound_at=NULL,updated_at=now() WHERE id=$2',
       [hash,request.user_id]
     );
     await client.query(
@@ -453,7 +457,7 @@ router.post('/password-reset-requests/:requestId/complete', authenticate, requir
     const request = (await client.query("SELECT * FROM password_reset_requests WHERE id=$1 AND status='pending' FOR UPDATE", [req.params.requestId])).rows[0];
     if (!request) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pending password reset request not found.' }); }
     const hash = bcrypt.hashSync(newPassword, 12);
-    await client.query('UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$2', [hash, request.user_id]);
+    await client.query('UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,active_device_hash=NULL,active_device_bound_at=NULL,updated_at=now() WHERE id=$2', [hash, request.user_id]);
     await client.query("UPDATE password_reset_requests SET status='completed',resolved_at=now(),resolved_by=$1 WHERE id=$2", [req.user.id, request.id]);
     await client.query('COMMIT');
     try { await audit(req,{action:'password_reset_admin',recordType:'user',recordId:request.user_id,newValue:{reset:true,loginLockCleared:true}}); } catch(e) { console.error('[auth/password-reset] audit failed',e); }
@@ -477,10 +481,14 @@ router.post('/password-reset-requests/:requestId/dismiss', authenticate, require
 // the route handler executes in the Netlify serverless request environment.
 router.post('/login', async (req, res, next) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, deviceToken } = req.body || {};
     if (!isNonEmptyString(String(email || '')) || !isNonEmptyString(String(password || ''))) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
+    if (!isNonEmptyString(String(deviceToken || '')) || String(deviceToken).trim().length < 32) {
+      return res.status(400).json({ error: 'A valid device session is required. Refresh the page and try again.' });
+    }
+    const deviceHash = hashDeviceToken(String(deviceToken).trim());
     const normalizedEmail = String(email).trim().toLowerCase();
     const { rows } = await pool.query(`SELECT * FROM users WHERE lower(email) = $1`, [normalizedEmail]);
     const user = rows[0];
@@ -509,7 +517,26 @@ router.post('/login', async (req, res, next) => {
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
     if (user.account_verification_status === 'rejected') return res.status(403).json({ error: 'This account did not pass identity verification. Contact an administrator.' });
-    await pool.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
+    const bound = (await pool.query(
+      `UPDATE users
+       SET failed_login_attempts = 0,
+           locked_until = NULL,
+           active_device_hash = $1,
+           active_device_bound_at = COALESCE(active_device_bound_at, now()),
+           updated_at = now()
+       WHERE id = $2
+         AND (active_device_hash IS NULL OR active_device_hash = $1)
+       RETURNING id`,
+      [deviceHash, user.id]
+    )).rows[0];
+
+    if (!bound) {
+      return res.status(409).json({
+        error: 'This account is already signed in on another device. Log out from that device first or ask an administrator to reset the device session.',
+        code: 'ACCOUNT_ACTIVE_ON_ANOTHER_DEVICE'
+      });
+    }
+
     let profile = null;
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
     if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
@@ -535,6 +562,14 @@ router.post('/login', async (req, res, next) => {
 
 router.post('/logout', authenticate, async (req, res, next) => {
   try {
+    await pool.query(
+      `UPDATE users
+       SET active_device_hash = NULL,
+           active_device_bound_at = NULL,
+           updated_at = now()
+       WHERE id = $1 AND active_device_hash = $2`,
+      [req.user.id, req.deviceHash]
+    );
     await audit(req, { action: 'logout', recordType: 'user', recordId: req.user.id });
     res.json({ message: 'Logged out.' });
   } catch (e) { next(e); }

@@ -47,6 +47,17 @@ const Store = {
       ? localStorage.setItem('sg_user', JSON.stringify(v))
       : localStorage.removeItem('sg_user');
   },
+
+  get deviceToken() {
+    let token = localStorage.getItem('sg_device_token');
+    if (!token) {
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('sg_device_token', token);
+    }
+    return token;
+  }
 };
 
 const AttendanceQr = {
@@ -140,7 +151,8 @@ const SessionGuard = {
 async function api(method, path, body, options = {}) {
 
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-Device-Token': Store.deviceToken
   };
 
   const tokenAtStart = Store.token;
@@ -387,7 +399,15 @@ const ApprovalManager = {
 
     loading: false,
 
-    timer: null
+    timer: null,
+
+    lastRefreshedAt: 0,
+
+    refreshIntervalMs: 300000,
+
+    staleAfterMs: 300000,
+
+    visibilityHandlerBound: false
 
   },
 
@@ -666,32 +686,18 @@ const ApprovalManager = {
           ).catch(() => []);
 
 
-        let total = 0;
+        // /classes already includes pending_count for each teacher-owned
+        // class, so sum those values locally. This avoids the previous N+1
+        // pattern of one extra pending-enrollments request per class.
 
-
-        for (const cls of classes) {
-
-          if (!Store.token || !Store.user) break;
-
-          try {
-
-            const rows =
-              await api(
-                'GET',
-                `/classes/${cls.id}/pending-enrollments`
-              );
-
-
-            total +=
-              Array.isArray(rows)
-                ? rows.length
-                : 0;
-
-          } catch {
-            // Ignore individual class errors.
-          }
-
-        }
+        const total =
+          Array.isArray(classes)
+            ? classes.reduce(
+                (sum, cls) =>
+                  sum + Number(cls.pending_count || 0),
+                0
+              )
+            : 0;
 
 
         this.state.teacherPending =
@@ -735,6 +741,8 @@ const ApprovalManager = {
     } finally {
 
       this.state.loading = false;
+
+      this.state.lastRefreshedAt = Date.now();
 
     }
 
@@ -887,21 +895,59 @@ const ApprovalManager = {
     }
 
 
-    // Refresh every 30 seconds.
+    // Conserve Neon compute: refresh approvals every 5 minutes only while
+    // the page is visible. Important user actions still call forceRefresh().
 
     this.state.timer =
       setInterval(
         () => {
 
-          if (Store.user) {
+          if (Store.user && document.visibilityState === 'visible') {
 
             this.refresh();
 
           }
 
         },
-        30000
+        this.state.refreshIntervalMs
       );
+
+
+    // When the user returns to the tab, refresh only if the notification
+    // data is stale instead of continuously polling in the background.
+
+    if (!this.state.visibilityHandlerBound) {
+
+      document.addEventListener('visibilitychange', () => {
+
+        if (
+          document.visibilityState === 'visible' &&
+          Store.user &&
+          Date.now() - this.state.lastRefreshedAt >= this.state.staleAfterMs
+        ) {
+
+          this.refresh();
+
+        }
+
+      });
+
+      window.addEventListener('focus', () => {
+
+        if (
+          Store.user &&
+          Date.now() - this.state.lastRefreshedAt >= this.state.staleAfterMs
+        ) {
+
+          this.refresh();
+
+        }
+
+      });
+
+      this.state.visibilityHandlerBound = true;
+
+    }
 
   },
 
@@ -972,7 +1018,8 @@ const Auth = {
           '/auth/login',
           {
             email,
-            password
+            password,
+            deviceToken: Store.deviceToken
           }
         );
 
