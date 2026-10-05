@@ -47,6 +47,17 @@ const Store = {
       ? localStorage.setItem('sg_user', JSON.stringify(v))
       : localStorage.removeItem('sg_user');
   },
+
+  get deviceToken() {
+    let token = localStorage.getItem('sg_device_token');
+    if (!token) {
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('sg_device_token', token);
+    }
+    return token;
+  }
 };
 
 const AttendanceQr = {
@@ -140,7 +151,8 @@ const SessionGuard = {
 async function api(method, path, body, options = {}) {
 
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-Device-Token': Store.deviceToken
   };
 
   const tokenAtStart = Store.token;
@@ -1006,7 +1018,8 @@ const Auth = {
           '/auth/login',
           {
             email,
-            password
+            password,
+            deviceToken: Store.deviceToken
           }
         );
 
