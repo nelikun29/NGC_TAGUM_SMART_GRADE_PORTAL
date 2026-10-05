@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
   verification_note TEXT,
   failed_login_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until TIMESTAMPTZ,
+  active_device_hash TEXT,
+  active_device_bound_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
