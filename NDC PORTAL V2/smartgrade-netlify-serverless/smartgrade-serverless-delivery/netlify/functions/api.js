@@ -3,6 +3,9 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const serverless = require('serverless-http');
+const { ensureSingleDeviceSessionSchema } = require(
+  path.join(__dirname, '..', '..', 'backend', 'db')
+);
 
 const apiRouter = require(
   path.join(__dirname, '..', '..', 'backend', 'api-router')
@@ -21,4 +24,9 @@ app.use(express.json());
 app.use('/.netlify/functions/api', apiRouter);
 app.use('/api', apiRouter);
 
-exports.handler = serverless(app);
+const serverlessHandler = serverless(app);
+
+exports.handler = async (event, context) => {
+  await ensureSingleDeviceSessionSchema();
+  return serverlessHandler(event, context);
+};

@@ -30,4 +30,25 @@ async function ensureSchema() {
   await pool.query(schema);
 }
 
-module.exports = { pool, ensureSchema };
+let singleDeviceSchemaReady = null;
+
+/**
+ * Additive runtime migration for single-device sessions.
+ * Cached per serverless instance so the ALTER checks run only once per cold start.
+ */
+async function ensureSingleDeviceSessionSchema() {
+  if (!singleDeviceSchemaReady) {
+    singleDeviceSchemaReady = pool.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS active_device_hash TEXT;
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS active_device_bound_at TIMESTAMPTZ;
+    `).catch(err => {
+      singleDeviceSchemaReady = null;
+      throw err;
+    });
+  }
+  await singleDeviceSchemaReady;
+}
+
+module.exports = { pool, ensureSchema, ensureSingleDeviceSessionSchema };

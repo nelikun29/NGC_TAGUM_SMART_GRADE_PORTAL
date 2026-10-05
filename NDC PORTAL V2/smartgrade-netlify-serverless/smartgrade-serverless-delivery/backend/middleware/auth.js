@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { pool } = require('../db');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -11,10 +12,20 @@ if (!JWT_SECRET) {
  * fresh from the DB on every request (not just trusting old token claims),
  * so a deactivated account is rejected immediately, not just at next login.
  */
+function hashDeviceToken(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
 async function authenticate(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Authentication required.' });
+
+  const deviceToken = String(req.headers['x-device-token'] || '').trim();
+  if (!deviceToken) {
+    return res.status(401).json({ error: 'This session is not linked to a trusted device. Please log in again.' });
+  }
+  const deviceHash = hashDeviceToken(deviceToken);
 
   let payload;
   try {
@@ -26,7 +37,8 @@ async function authenticate(req, res, next) {
   try {
     const { rows } = await pool.query(
       `SELECT id, role, email, is_active, approval_status,
-              account_verification_status, verification_note
+              account_verification_status, verification_note,
+              active_device_hash
        FROM users WHERE id = $1`,
       [payload.sub]
     );
@@ -34,6 +46,13 @@ async function authenticate(req, res, next) {
     if (!user || !user.is_active || user.approval_status !== 'approved') {
       return res.status(401).json({ error: 'Account is not active. Please contact an administrator.' });
     }
+    if (!user.active_device_hash || user.active_device_hash !== deviceHash) {
+      return res.status(401).json({
+        error: 'This account is active on another device or this device session has been revoked. Please log in again.',
+        code: 'DEVICE_SESSION_INVALID'
+      });
+    }
+    req.deviceHash = deviceHash;
     req.user = {
       id: user.id,
       role: user.role,
