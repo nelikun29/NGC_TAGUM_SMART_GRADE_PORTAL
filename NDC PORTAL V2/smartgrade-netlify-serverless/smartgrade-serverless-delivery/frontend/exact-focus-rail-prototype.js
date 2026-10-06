@@ -540,32 +540,34 @@
 
     panel.innerHTML='<div class="exact-page-head"><div class="exact-page-kicker">Notifications</div><h2>Pending Enrollment Requests</h2><p>Loading pending requests from all classes...</p></div>';
 
-    const silentGet=async path=>{
-      try{
-        const headers={'Content-Type':'application/json'};
-        if(Store?.token) headers.Authorization='Bearer '+Store.token;
-        const res=await fetch(API_BASE+path,{method:'GET',headers});
-        if(!res.ok) return {ok:false,rows:[]};
-        const data=await res.json().catch(()=>[]);
-        return {ok:true,rows:Array.isArray(data)?data:[]};
-      }catch{
-        return {ok:false,rows:[]};
-      }
-    };
-
-    const groups=[];
+    let all=[];
     let failed=0;
 
-    // Load sequentially to avoid a burst of simultaneous requests/toasts.
-    for(const cls of classes){
-      const result=await silentGet('/classes/'+cls.id+'/pending-enrollments');
-      if(!result.ok) failed++;
-      groups.push({cls,rows:result.rows});
+    try{
+      const rows=await api(
+        'GET',
+        '/classes/pending-enrollments/all',
+        undefined,
+        { silentErrors:true }
+      );
+
+      all=(Array.isArray(rows)?rows:[]).map(row=>({
+        cls:{
+          id:row.class_id,
+          subject:row.subject,
+          section:row.section,
+          year_level:row.year_level,
+          room_number:row.room_number,
+          class_code:row.class_code
+        },
+        row
+      }));
+    }catch{
+      failed=classes.length;
     }
 
-    const all=groups.flatMap(g=>g.rows.map(r=>({cls:g.cls,row:r})));
     const unavailable=failed>0
-      ? '<div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-2"></i>'+failed+' class'+(failed===1?'':'es')+' could not be checked right now. No repeated error notifications will be shown; refresh this page to try again.</div>'
+      ? '<div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Pending requests could not be checked right now. Refresh this page to try again.</div>'
       : '';
 
     panel.innerHTML=`
