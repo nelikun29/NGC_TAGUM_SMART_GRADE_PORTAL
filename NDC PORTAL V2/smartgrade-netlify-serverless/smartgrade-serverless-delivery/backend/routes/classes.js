@@ -1116,6 +1116,64 @@ router.get(
 
 
 // ============================================================
+// ALL PENDING ENROLLMENT REQUESTS FOR LOGGED-IN TEACHER
+// Single-query endpoint used by the Notifications workspace.
+// ============================================================
+
+router.get(
+  '/pending-enrollments/all',
+  requireRole('teacher'),
+  async (req, res, next) => {
+
+    try {
+
+      const { rows } =
+        await pool.query(
+          `
+          SELECT
+            e.id AS enrollment_id,
+            e.enrolled_at,
+            s.id,
+            s.student_number,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+            u.email,
+            c.id AS class_id,
+            c.subject,
+            c.section,
+            c.year_level,
+            c.room_number,
+            c.class_code
+          FROM enrollments e
+          JOIN students s
+            ON s.id = e.student_id
+          JOIN users u
+            ON u.id = s.id
+          JOIN classes c
+            ON c.id = e.class_id
+          WHERE
+            c.teacher_id = $1
+            AND e.status = 'pending'
+          ORDER BY
+            e.enrolled_at ASC
+          `,
+          [req.user.id]
+        );
+
+      res.json(rows);
+
+    } catch (e) {
+
+      next(e);
+
+    }
+
+  }
+);
+
+
+// ============================================================
 // PENDING ENROLLMENT REQUESTS
 // ============================================================
 
