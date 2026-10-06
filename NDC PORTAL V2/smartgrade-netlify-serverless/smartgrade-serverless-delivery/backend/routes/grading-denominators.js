@@ -7,6 +7,7 @@ router.use(authenticate);
 
 const num=v=>v===null||v===undefined||v===''?null:Number(v);
 async function schemeFor(classId){return (await pool.query('SELECT * FROM grading_schemes WHERE class_id=$1',[classId])).rows[0];}
+async function componentHasAdjustments(classId,componentKey,db=pool){return Number((await db.query('SELECT COUNT(*)::int n FROM grade_adjustments WHERE class_id=$1 AND component=$2',[classId,componentKey])).rows[0].n||0)>0;}
 async function configuredTotals(classId,db=pool){
   const quiz=Number((await db.query('SELECT COALESCE(SUM(total_items),0) n FROM quizzes WHERE class_id=$1',[classId])).rows[0].n);
   const performance=Number((await db.query('SELECT COALESCE(SUM(max_score),0) n FROM performance_tasks WHERE class_id=$1',[classId])).rows[0].n);
@@ -28,18 +29,39 @@ router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,asyn
   const totals=await configuredTotals(req.params.classId,client);const items=Array.isArray(req.body.components)?req.body.components:[];
   for(const item of items){
     const c=(await client.query('SELECT * FROM grading_components WHERE id=$1 AND scheme_id=$2',[item.id,scheme.id])).rows[0];if(!c)continue;
+    const oldMax=num(c.max_points);
+    const requestedMax=num(item.maxPoints);
+    const maxChanged=(oldMax===null)!==(requestedMax===null)||(oldMax!==null&&requestedMax!==null&&Math.abs(oldMax-requestedMax)>0.0001);
+    if(maxChanged&&await componentHasAdjustments(req.params.classId,c.component_key,client)){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:`${c.name} has learner manual adjustments. Remove those adjustments before changing its Total Score.`});
+    }
+
     if(c.source_type==='attendance'){
-      const denominator=num(item.maxPoints);if(denominator===null||!Number.isFinite(denominator)||denominator<=0||!Number.isInteger(denominator)){await client.query('ROLLBACK');return res.status(400).json({error:'Attendance Total Required Days must be a positive whole number.'});}
+      const denominator=requestedMax;if(denominator===null||!Number.isFinite(denominator)||denominator<=0||!Number.isInteger(denominator)){await client.query('ROLLBACK');return res.status(400).json({error:'Attendance Total Required Days must be a positive whole number.'});}
       const highest=Number((await client.query(`SELECT COALESCE(MAX(points),0) n FROM (SELECT ar.student_id,SUM(CASE WHEN ar.status='present' THEN 1 WHEN ar.status='late' THEN .75 ELSE 0 END) points FROM attendance_sessions s JOIN attendance_records ar ON ar.session_id=s.id WHERE s.class_id=$1 GROUP BY ar.student_id) x`,[req.params.classId])).rows[0].n);if(highest>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`Attendance Total Required Days cannot be lower than the highest recorded attendance (${highest}).`});}
       await client.query('UPDATE grading_components SET max_points=$1,updated_at=now() WHERE id=$2',[denominator,c.id]);
     }
-    if(['quiz','performance','custom'].includes(c.source_type)){
-      const denominator=num(item.maxPoints);if(denominator!==null&&(!Number.isFinite(denominator)||denominator<=0)){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name} Overall Total Score must be greater than 0.`});}
-      const used=c.source_type==='quiz'?totals.quiz:c.source_type==='performance'?totals.performance:Number(totals.custom?.[c.id]||0);if(denominator!==null&&used>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name}: configured assessments total ${used} points, which exceeds the proposed overall total of ${denominator}.`});}
+
+    if(['quiz','performance','custom','exam'].includes(c.source_type)){
+      const denominator=requestedMax;if(denominator!==null&&(!Number.isFinite(denominator)||denominator<=0)){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name} Overall Total Score must be greater than 0.`});}
+      const used=c.source_type==='quiz'
+        ? totals.quiz
+        : c.source_type==='performance'
+          ? totals.performance
+          : c.source_type==='exam'
+            ? Object.values(totals.exams||{}).reduce((s,n)=>s+Number(n||0),0)
+            : Number(totals.custom?.[c.id]||0);
+      if(denominator!==null&&used>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`${c.name}: configured assessments total ${used} points, which exceeds the proposed overall total of ${denominator}.`});}
       await client.query('UPDATE grading_components SET max_points=$1,calculation_method=$2,updated_at=now() WHERE id=$3',[denominator,denominator===null?'average_percentage':'points_total',c.id]);
     }
+
     if(c.source_type==='exam')for(const sub of item.subcomponents||[]){
-      const dbSub=(await client.query('SELECT * FROM grading_subcomponents WHERE id=$1 AND component_id=$2',[sub.id,c.id])).rows[0];if(!dbSub)continue;const denominator=num(sub.maxPoints);if(denominator!==null&&(!Number.isFinite(denominator)||denominator<=0)){await client.query('ROLLBACK');return res.status(400).json({error:`${dbSub.name} Overall Total Score must be greater than 0.`});}
+      const dbSub=(await client.query('SELECT * FROM grading_subcomponents WHERE id=$1 AND component_id=$2',[sub.id,c.id])).rows[0];if(!dbSub)continue;
+      const denominator=num(sub.maxPoints);if(denominator!==null&&(!Number.isFinite(denominator)||denominator<=0)){await client.query('ROLLBACK');return res.status(400).json({error:`${dbSub.name} Overall Total Score must be greater than 0.`});}
+      const oldSubMax=num(dbSub.max_points);
+      const subChanged=(oldSubMax===null)!==(denominator===null)||(oldSubMax!==null&&denominator!==null&&Math.abs(oldSubMax-denominator)>0.0001);
+      if(subChanged&&await componentHasAdjustments(req.params.classId,c.component_key,client)){await client.query('ROLLBACK');return res.status(409).json({error:`${c.name} has learner manual adjustments. Remove those adjustments before changing exam subcomponent totals.`});}
       const key=String(dbSub.source_filter||dbSub.name||'').toLowerCase(),used=totals.exams[key]||0;if(denominator!==null&&used>denominator){await client.query('ROLLBACK');return res.status(400).json({error:`${dbSub.name}: configured exams total ${used} points, which exceeds the proposed overall total of ${denominator}.`});}
       await client.query('UPDATE grading_subcomponents SET max_points=$1,updated_at=now() WHERE id=$2',[denominator,dbSub.id]);
     }
