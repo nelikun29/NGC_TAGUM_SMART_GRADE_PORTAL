@@ -679,16 +679,17 @@ const ApprovalManager = {
 
       else if (user.role === 'teacher') {
 
+        // Reuse the Teacher class cache when it is fresh. This prevents
+        // notification refreshes from immediately repeating the same /classes
+        // query already performed by the Teacher dashboard.
+
         const classes =
-          await api(
-            'GET',
-            '/classes'
-          ).catch(() => []);
+          await Teacher.loadClasses();
 
 
         // /classes already includes pending_count for each teacher-owned
-        // class, so sum those values locally. This avoids the previous N+1
-        // pattern of one extra pending-enrollments request per class.
+        // class, so sum those values locally. This avoids both duplicate
+        // dashboard fetches and the older per-class N+1 pattern.
 
         const total =
           Array.isArray(classes)
@@ -2264,12 +2265,53 @@ const Teacher = {
 
   _classes: [],
 
+  _classesLoadedAt: 0,
+
+  classCacheMaxAgeMs: 60000,
+
+
+  async loadClasses({ force = false } = {}) {
+
+    const cacheFresh =
+      Array.isArray(Teacher._classes) &&
+      Teacher._classesLoadedAt > 0 &&
+      Date.now() - Teacher._classesLoadedAt < Teacher.classCacheMaxAgeMs;
+
+
+    if (!force && cacheFresh) {
+
+      return Teacher._classes;
+
+    }
+
+
+    const classes =
+      await api(
+        'GET',
+        '/classes'
+      ).catch(() => []);
+
+
+    Teacher._classes =
+      Array.isArray(classes)
+        ? classes
+        : [];
+
+
+    Teacher._classesLoadedAt =
+      Date.now();
+
+
+    return Teacher._classes;
+
+  },
+
 
   // ==========================================================
   // MAIN TEACHER DASHBOARD
   // ==========================================================
 
-  async render() {
+  async render(options = {}) {
 
     const el =
       document.getElementById(
@@ -2283,17 +2325,10 @@ const Teacher = {
     // LOAD CLASSES
     // --------------------------------------------------------
 
-    const classes =
-      await api(
-        'GET',
-        '/classes'
-      ).catch(() => []);
-
-
-    Teacher._classes =
-      Array.isArray(classes)
-        ? classes
-        : [];
+    await Teacher.loadClasses({
+      force:
+        options.refreshClasses === true
+    });
 
 
     // --------------------------------------------------------
@@ -3296,9 +3331,12 @@ const Teacher = {
       id;
 
 
-    // Keep current tab.
+    // Keep current tab. Re-render from the existing class cache;
+    // selecting a class does not change class metadata or counts.
 
-    await Teacher.render();
+    await Teacher.render({
+      refreshClasses: false
+    });
 
   },
 
