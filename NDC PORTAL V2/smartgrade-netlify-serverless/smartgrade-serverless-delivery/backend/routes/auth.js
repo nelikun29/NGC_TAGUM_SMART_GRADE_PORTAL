@@ -22,8 +22,8 @@ function hashDeviceToken(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
 
-function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+function signToken(user, sessionId) {
+  return jwt.sign({ sub: user.id, role: user.role, sid: sessionId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // ---------- STUDENT REGISTRATION ----------
@@ -517,31 +517,29 @@ router.post('/login', async (req, res, next) => {
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
     if (user.account_verification_status === 'rejected') return res.status(403).json({ error: 'This account did not pass identity verification. Contact an administrator.' });
+    const sessionId = crypto.randomUUID();
     const bound = (await pool.query(
       `UPDATE users
        SET failed_login_attempts = 0,
            locked_until = NULL,
            active_device_hash = $1,
-           active_device_bound_at = COALESCE(active_device_bound_at, now()),
+           active_session_id = $3,
+           active_device_bound_at = now(),
            updated_at = now()
        WHERE id = $2
-         AND (active_device_hash IS NULL OR active_device_hash = $1)
        RETURNING id`,
-      [deviceHash, user.id]
+      [deviceHash, user.id, sessionId]
     )).rows[0];
 
     if (!bound) {
-      return res.status(409).json({
-        error: 'This account is already signed in on another device. Log out from that device first or ask an administrator to reset the device session.',
-        code: 'ACCOUNT_ACTIVE_ON_ANOTHER_DEVICE'
-      });
+      return res.status(500).json({ error: 'Unable to establish a device session. Please try again.' });
     }
 
     let profile = null;
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
     if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
     const pendingClaim=user.role==='student'?(await pool.query(`SELECT id,claimed_student_number,status FROM student_id_claims WHERE claimant_user_id=$1 AND status IN ('pending','under_review') ORDER BY created_at DESC LIMIT 1`,[user.id])).rows[0]||null:null;
-    const token = signToken(user);
+    const token = signToken(user, sessionId);
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: {
       id: user.id,
@@ -565,10 +563,11 @@ router.post('/logout', authenticate, async (req, res, next) => {
     await pool.query(
       `UPDATE users
        SET active_device_hash = NULL,
+           active_session_id = NULL,
            active_device_bound_at = NULL,
            updated_at = now()
-       WHERE id = $1 AND active_device_hash = $2`,
-      [req.user.id, req.deviceHash]
+       WHERE id = $1 AND active_device_hash = $2 AND active_session_id = $3`,
+      [req.user.id, req.deviceHash, req.sessionId]
     );
     await audit(req, { action: 'logout', recordType: 'user', recordId: req.user.id });
     res.json({ message: 'Logged out.' });
