@@ -1616,19 +1616,38 @@ const Student = {
       Store.user;
 
 
-    const classes =
+    const overview =
       await api(
         'GET',
-        '/classes'
-      ).catch(() => []);
+        '/grades/student/overview'
+      ).catch(() => ({ items: [] }));
+
+
+    const items =
+      Array.isArray(overview?.items)
+        ? overview.items
+        : [];
+
+
+    const classes =
+      items
+        .map(item => item?.class)
+        .filter(Boolean);
 
 
     let gradesHtml = '';
 
 
     for (
-      const c of classes
+      const item of items
     ) {
+
+      const c =
+        item?.class;
+
+
+      if (!c) continue;
+
 
       if (
         c.enrollment_status ===
@@ -1643,17 +1662,10 @@ const Student = {
       }
 
 
-      const grade =
-        await api(
-          'GET',
-          `/grades/${c.id}/students/${user.id}`
-        ).catch(() => null);
-
-
       gradesHtml +=
         Student.classCard(
           c,
-          grade
+          item?.grade || null
         );
 
     }
