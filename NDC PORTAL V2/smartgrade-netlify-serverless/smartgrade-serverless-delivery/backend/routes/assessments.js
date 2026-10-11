@@ -16,6 +16,36 @@ function assertNotLockedOrAdmin(req, res, isLocked) {
   return true;
 }
 
+// Ensure academic metadata is visible only to authorized class participants.
+async function requireClassAccess(req, res, next) {
+  try {
+    const classId = req.query.classId;
+    if (!classId) return res.status(400).json({ error: 'classId is required.' });
+    if (req.user.role === 'admin') return next();
+    if (req.user.role === 'teacher') {
+      const row = (await pool.query('SELECT 1 FROM classes WHERE id=$1 AND teacher_id=$2', [classId, req.user.id])).rows[0];
+      if (!row) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+      return next();
+    }
+    if (req.user.role === 'student') {
+      const row = (await pool.query("SELECT 1 FROM enrollments WHERE class_id=$1 AND student_id=$2 AND status='active'", [classId, req.user.id])).rows[0];
+      if (!row) return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+      return next();
+    }
+    return res.status(403).json({ error: 'You are not authorized to perform this action.' });
+  } catch (e) { next(e); }
+}
+
+async function requireActiveEnrollment(req, res, next) {
+  try {
+    const table = req.path.startsWith('/quizzes/') ? 'quizzes' : req.path.startsWith('/performance-tasks/') ? 'performance_tasks' : 'examinations';
+    const id = req.params.quizId || req.params.taskId || req.params.examId;
+    const row = (await pool.query(`SELECT 1 FROM ${table} a JOIN enrollments e ON e.class_id=a.class_id AND e.student_id=$2 AND e.status='active' WHERE a.id=$1`, [id, req.params.studentId])).rows[0];
+    if (!row) return res.status(403).json({ error: 'Student is not actively enrolled in this class.' });
+    next();
+  } catch (e) { next(e); }
+}
+
 // ===================== QUIZZES =====================
 
 router.post('/quizzes', requireRole('teacher', 'admin'), requireClassOwnership, async (req, res, next) => {
@@ -62,7 +92,7 @@ router.get('/quizzes/:quizId/scores', requireRole('teacher', 'admin'), async (re
   } catch (e) { next(e); }
 });
 
-router.put('/quizzes/:quizId/scores/:studentId', requireRole('teacher', 'admin'), async (req, res, next) => {
+router.put('/quizzes/:quizId/scores/:studentId', requireRole('teacher', 'admin'), requireActiveEnrollment, async (req, res, next) => {
   try {
     const quiz = (await pool.query(`SELECT * FROM quizzes WHERE id = $1`, [req.params.quizId])).rows[0];
     if (!quiz) return res.status(404).json({ error: 'Quiz not found.' });
@@ -167,7 +197,7 @@ router.post('/performance-tasks', requireRole('teacher', 'admin'), requireClassO
   } catch (e) { next(e); }
 });
 
-router.get('/performance-tasks', async (req, res, next) => {
+router.get('/performance-tasks', requireClassAccess, async (req, res, next) => {
   try {
     const { classId } = req.query;
     if (!classId) return res.status(400).json({ error: 'classId is required.' });
@@ -188,7 +218,7 @@ router.get('/performance-tasks/:taskId/scores', requireRole('teacher', 'admin'),
   } catch (e) { next(e); }
 });
 
-router.put('/performance-tasks/:taskId/scores/:studentId', requireRole('teacher', 'admin'), async (req, res, next) => {
+router.put('/performance-tasks/:taskId/scores/:studentId', requireRole('teacher', 'admin'), requireActiveEnrollment, async (req, res, next) => {
   try {
     const task = (await pool.query(`SELECT * FROM performance_tasks WHERE id = $1`, [req.params.taskId])).rows[0];
     if (!task) return res.status(404).json({ error: 'Performance task not found.' });
@@ -249,7 +279,7 @@ router.post('/exams', requireRole('teacher', 'admin'), requireClassOwnership, as
   } catch (e) { next(e); }
 });
 
-router.get('/exams', async (req, res, next) => {
+router.get('/exams', requireClassAccess, async (req, res, next) => {
   try {
     const { classId } = req.query;
     if (!classId) return res.status(400).json({ error: 'classId is required.' });
@@ -270,7 +300,7 @@ router.get('/exams/:examId/scores', requireRole('teacher', 'admin'), async (req,
   } catch (e) { next(e); }
 });
 
-router.put('/exams/:examId/scores/:studentId', requireRole('teacher', 'admin'), async (req, res, next) => {
+router.put('/exams/:examId/scores/:studentId', requireRole('teacher', 'admin'), requireActiveEnrollment, async (req, res, next) => {
   try {
     const exam = (await pool.query(`SELECT * FROM examinations WHERE id = $1`, [req.params.examId])).rows[0];
     if (!exam) return res.status(404).json({ error: 'Examination not found.' });
