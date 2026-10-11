@@ -19,7 +19,7 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
 function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+  return jwt.sign({ sub: user.id, role: user.role, sv: user.session_version ?? 0 }, JWT_SECRET, { expiresIn: '8h' });
 }
 
 // ---------- STUDENT REGISTRATION ----------
@@ -417,7 +417,7 @@ router.post('/reset-password', async (req,res,next)=>{
 
     const hash=bcrypt.hashSync(newPassword,12);
     await client.query(
-      'UPDATE users SET password_hash=$1,failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$2',
+      'UPDATE users SET password_hash=$1,session_version=session_version+1,failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$2',
       [hash,request.user_id]
     );
     await client.query(
