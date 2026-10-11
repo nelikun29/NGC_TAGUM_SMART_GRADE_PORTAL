@@ -44,6 +44,46 @@ async function getClassGradebook(classId){
  return Promise.all(roster.map(async s=>{const grade=await computeClassGrade(s.id,classId);const comps=grade.components||{};const dynamicComponents=Object.entries(comps).map(([key,c])=>({key,name:c.name||({attendance:'Attendance',quiz:'Quiz',performance:'Performance Task',exam:'Exam'}[key]||key),percent:c.percent,weight:Number(c.weight),available:!!c.available,adjusted:!!c.adjusted,earned:c.earned??null,max:c.max??null}));return {studentId:s.id,studentNumber:s.student_number,studentName:`${s.last_name}, ${s.first_name}`,attendance:comps.attendance?.percent??null,quiz:comps.quiz?.percent??null,performance:comps.performance?.percent??null,exam:comps.exam?.percent??null,components:Object.fromEntries(dynamicComponents.map(c=>[c.key,c])),componentOrder:dynamicComponents.map(c=>c.key),finalGrade:grade.finalGrade,status:grade.status,incompleteReason:grade.message,schemeId:grade.schemeId||null,schemeVersion:grade.schemeVersion||null};}));
 }
 
+// ============================================================
+// STUDENT DASHBOARD OVERVIEW
+//
+// Returns the student's active/pending classes and grade summaries
+// in one authenticated request. This replaces the frontend N+1
+// pattern of /classes plus one /grades request per active class.
+// ============================================================
+
+router.get('/student/overview',requireRole('student'),async(req,res,next)=>{
+ try{
+  const studentId=req.user.id;
+  const {rows:classes}=await pool.query(`
+   SELECT
+    c.*,
+    e.status AS enrollment_status,
+    at.academic_year,
+    at.semester
+   FROM classes c
+   JOIN enrollments e ON e.class_id=c.id
+   LEFT JOIN academic_terms at ON at.id=c.term_id
+   WHERE e.student_id=$1
+    AND e.status IN ('active','pending')
+   ORDER BY c.created_at DESC
+  `,[studentId]);
+
+  const items=await Promise.all(classes.map(async cls=>{
+   if(cls.enrollment_status==='pending'){
+    return {class:cls,grade:null};
+   }
+   const grade=await computeClassGrade(studentId,cls.id);
+   const safeGrade=grade.status==='released'
+    ? {...grade,visibleToStudent:true}
+    : {...grade,finalGrade:null,visibleToStudent:false};
+   return {class:cls,grade:safeGrade};
+  }));
+
+  res.json({items});
+ }catch(e){next(e);}
+});
+
 router.get('/:classId/students/:studentId',async(req,res,next)=>{try{const{classId,studentId}=req.params;if(!checkStudentAccess(req,studentId))return res.status(403).json({error:'You are not authorized to perform this action.'});if(req.user.role==='teacher'){const cls=(await pool.query('SELECT teacher_id FROM classes WHERE id=$1',[classId])).rows[0];if(!cls||cls.teacher_id!==req.user.id)return res.status(403).json({error:'You are not authorized to perform this action.'});}const result=await computeClassGrade(studentId,classId);if(req.user.role==='student'&&result.status!=='released')return res.json({...result,finalGrade:null,visibleToStudent:false});res.json({...result,visibleToStudent:true});}catch(e){next(e);}});
 router.get('/:classId',requireClassOwnership,async(req,res,next)=>{try{res.json(await getClassGradebook(req.params.classId));}catch(e){next(e);}});
 router.get('/:classId/gradebook',requireClassOwnership,async(req,res,next)=>{try{res.json(await getClassGradebook(req.params.classId));}catch(e){next(e);}});
