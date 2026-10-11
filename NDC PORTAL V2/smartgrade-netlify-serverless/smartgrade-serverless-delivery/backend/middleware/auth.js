@@ -52,7 +52,11 @@ async function authenticate(req, res, next) {
         code: 'DEVICE_SESSION_INVALID'
       });
     }
-    if (!payload.sid || !user.active_session_id || payload.sid !== user.active_session_id) {\n      return res.status(401).json({ error: 'A newer login has ended this session. Please log in again.', code: 'SESSION_REPLACED' });\n    }\n    req.sessionId = payload.sid;\n    req.deviceHash = deviceHash;
+    if (!payload.sid || !user.active_session_id || payload.sid !== user.active_session_id) {
+      return res.status(401).json({ error: 'A newer login has ended this session. Please log in again.', code: 'SESSION_REPLACED' });
+    }
+    req.sessionId = payload.sid;
+    req.deviceHash = deviceHash;
     req.user = {
       id: user.id,
       role: user.role,
