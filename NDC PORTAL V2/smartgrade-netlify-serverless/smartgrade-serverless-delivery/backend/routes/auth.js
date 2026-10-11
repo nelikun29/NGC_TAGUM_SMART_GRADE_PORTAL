@@ -22,8 +22,8 @@ function hashDeviceToken(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
 
-function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+function signToken(user, sessionId) {
+  return jwt.sign({ sub: user.id, role: user.role, sid: sessionId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // ---------- STUDENT REGISTRATION ----------
@@ -517,16 +517,18 @@ router.post('/login', async (req, res, next) => {
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
     if (user.account_verification_status === 'rejected') return res.status(403).json({ error: 'This account did not pass identity verification. Contact an administrator.' });
+    const sessionId = crypto.randomUUID();
     const bound = (await pool.query(
       `UPDATE users
        SET failed_login_attempts = 0,
            locked_until = NULL,
            active_device_hash = $1,
+           active_session_id = $3,
            active_device_bound_at = now(),
            updated_at = now()
        WHERE id = $2
        RETURNING id`,
-      [deviceHash, user.id]
+      [deviceHash, user.id, sessionId]
     )).rows[0];
 
     if (!bound) {
@@ -561,6 +563,7 @@ router.post('/logout', authenticate, async (req, res, next) => {
     await pool.query(
       `UPDATE users
        SET active_device_hash = NULL,
+           active_session_id = NULL,
            active_device_bound_at = NULL,
            updated_at = now()
        WHERE id = $1 AND active_device_hash = $2 AND active_session_id = $3`,
