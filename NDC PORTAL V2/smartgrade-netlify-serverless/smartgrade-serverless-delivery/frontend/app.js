@@ -146,7 +146,8 @@ const SessionGuard = {
     } catch {}
 
     Store.token = null;
-    Store.user = null;
+    // Another tab may already have a newer valid login; do not clear it.
+    if (!localStorage.getItem('sg_token')) Store.user = null;
 
     try {
       Views.renderForRole();
