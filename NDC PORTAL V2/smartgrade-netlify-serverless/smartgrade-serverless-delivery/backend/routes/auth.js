@@ -543,7 +543,7 @@ router.post('/login', async (req, res, next) => {
 
 router.post('/logout', authenticate, async (req, res, next) => {
   try {
-    await pool.query('INSERT INTO revoked_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3) ON CONFLICT (token_hash) DO NOTHING', [req.user.sessionTokenHash, req.user.id, req.user.sessionExpiresAt]);
+    await pool.query('INSERT INTO revoked_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3) ON CONFLICT (token_hash) DO NOTHING', [req.sessionSecurity.tokenHash, req.user.id, req.sessionSecurity.expiresAt]);
     await audit(req, { action: 'logout', recordType: 'user', recordId: req.user.id });
     res.json({ message: 'Logged out.' });
   } catch (e) { next(e); }
