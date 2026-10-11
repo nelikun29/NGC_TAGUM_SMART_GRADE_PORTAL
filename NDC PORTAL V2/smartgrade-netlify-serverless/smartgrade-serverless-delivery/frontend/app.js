@@ -2270,6 +2270,8 @@ const Teacher = {
   },
 
   _classes: [],
+  _gradebookRequestId: 0,
+  _renderRequestId: 0,
 
 
   // ==========================================================
@@ -2277,6 +2279,7 @@ const Teacher = {
   // ==========================================================
 
   async render() {
+    const renderRequestId = ++this._renderRequestId;
 
     const el =
       document.getElementById(
@@ -2296,6 +2299,8 @@ const Teacher = {
         '/classes'
       ).catch(() => []);
 
+    // A newer class selection has started a newer render.
+    if (renderRequestId !== this._renderRequestId) return;
 
     Teacher._classes =
       Array.isArray(classes)
@@ -3301,7 +3306,8 @@ const Teacher = {
 
     Teacher.state.classId =
       id;
-
+    // Invalidate gradebook responses from the previously selected class.
+    ++Teacher._gradebookRequestId;
 
     // Keep current tab.
 
@@ -4471,35 +4477,26 @@ const Teacher = {
   // ==========================================================
 
   async renderGradebook() {
-
-    const box =
-      document.getElementById(
-        'teacher-tab-content'
-      );
-
-
+    const requestId = ++this._gradebookRequestId;
+    const box = document.getElementById('teacher-tab-content');
     if (!box) return;
+    const cid = Teacher.state.classId;
+    if (!cid) { box.innerHTML = ''; return; }
 
-
-    const cid =
-      Teacher.state.classId;
-
-
-    if (!cid) {
-
-      box.innerHTML = '';
-
+    box.innerHTML = '<div class="text-center py-8 text-slate-500" role="status">Loading enrolled students and grades…</div>';
+    let rows;
+    try {
+      rows = await api('GET', `/grades/${cid}`);
+    } catch (error) {
+      if (requestId !== this._gradebookRequestId || String(cid) !== String(this.state.classId)) return;
+      box.innerHTML = '<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Unable to load this class\'s enrolled students. Please select the class again or check your connection.</div>';
       return;
-
     }
-
-
-    const rows =
-      await api(
-        'GET',
-        `/grades/${cid}`
-      ).catch(() => []);
-
+    if (requestId !== this._gradebookRequestId || String(cid) !== String(this.state.classId)) return;
+    if (!Array.isArray(rows)) {
+      box.innerHTML = '<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Unexpected gradebook response. Please try again.</div>';
+      return;
+    }
 
     box.innerHTML = `
 
