@@ -1623,40 +1623,31 @@ const Student = {
       ).catch(() => []);
 
 
-    let gradesHtml = '';
-
-
-    for (
-      const c of classes
-    ) {
-
-      if (
-        c.enrollment_status ===
-        'pending'
-      ) {
-
-        gradesHtml +=
-          Student.pendingCard(c);
-
-        continue;
-
-      }
-
-
-      const grade =
-        await api(
+    // Fetch independent class grades concurrently instead of waiting for
+    // each network round-trip in sequence (especially slow on mobile).
+    // Limit concurrency to avoid overwhelming the serverless DB pool.
+    const gradeResults = new Array(classes.length);
+    let nextGradeIndex = 0;
+    async function loadNextGrade() {
+      while (nextGradeIndex < classes.length) {
+        const index = nextGradeIndex++;
+        const c = classes[index];
+        if (c.enrollment_status === 'pending') {
+          gradeResults[index] = Student.pendingCard(c);
+          continue;
+        }
+        const grade = await api(
           'GET',
           `/grades/${c.id}/students/${user.id}`
         ).catch(() => null);
-
-
-      gradesHtml +=
-        Student.classCard(
-          c,
-          grade
-        );
-
+        gradeResults[index] = Student.classCard(c, grade);
+      }
     }
+    await Promise.all(Array.from(
+      { length: Math.min(3, classes.length) },
+      () => loadNextGrade()
+    ));
+    let gradesHtml = gradeResults.join('');
 
 
     if (
