@@ -124,7 +124,9 @@ const SessionGuard = {
     }
   },
 
-  handleUnauthorized(message, currentController = null) {
+  handleUnauthorized(message, currentController = null, requestToken = null) {
+    // Ignore a 401 from an earlier login that completed after session rotation.
+    if (requestToken && requestToken !== Store.token) return;
     if (this.loggingOut || this.authFailureHandled) return;
 
     this.authFailureHandled = true;
@@ -234,7 +236,7 @@ async function api(method, path, body, options = {}) {
       !options.suppressAuthFailure;
 
     if (isProtectedSessionFailure) {
-      SessionGuard.handleUnauthorized(message, controller);
+      SessionGuard.handleUnauthorized(message, controller, tokenAtStart);
       SessionGuard.controllers.delete(controller);
       throw new Error(message);
     }
@@ -1039,6 +1041,8 @@ const Auth = {
         );
 
 
+      // Cancel requests still carrying the old session before activating the new one.
+      SessionGuard.abortAll();
       Store.token =
         data.token;
 
