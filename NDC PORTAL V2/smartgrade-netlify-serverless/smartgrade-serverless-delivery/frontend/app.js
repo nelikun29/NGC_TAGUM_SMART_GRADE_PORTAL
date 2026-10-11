@@ -25,13 +25,27 @@ const API_BASE = window.SMARTGRADE_API_BASE || '/api';
 
 const Store = {
   get token() {
-    return localStorage.getItem('sg_token');
+    // Each open tab retains its own authenticated session snapshot.
+    // A newer login in another tab cannot silently upgrade an older tab.
+    const tabToken = sessionStorage.getItem('sg_tab_token');
+    if (tabToken) return tabToken;
+    const saved = localStorage.getItem('sg_token');
+    if (saved) sessionStorage.setItem('sg_tab_token', saved);
+    return saved;
   },
 
   set token(v) {
-    v
-      ? localStorage.setItem('sg_token', v)
-      : localStorage.removeItem('sg_token');
+    if (v) {
+      sessionStorage.setItem('sg_tab_token', v);
+      localStorage.setItem('sg_token', v);
+    } else {
+      const tabToken = sessionStorage.getItem('sg_tab_token');
+      sessionStorage.removeItem('sg_tab_token');
+      // Never erase a newer login belonging to a different tab.
+      if (!tabToken || localStorage.getItem('sg_token') === tabToken) {
+        localStorage.removeItem('sg_token');
+      }
+    }
   },
 
   get user() {
@@ -132,7 +146,8 @@ const SessionGuard = {
     } catch {}
 
     Store.token = null;
-    Store.user = null;
+    // Another tab may already have a newer valid login; do not clear it.
+    if (!localStorage.getItem('sg_token')) Store.user = null;
 
     try {
       Views.renderForRole();
@@ -1623,40 +1638,31 @@ const Student = {
       ).catch(() => []);
 
 
-    let gradesHtml = '';
-
-
-    for (
-      const c of classes
-    ) {
-
-      if (
-        c.enrollment_status ===
-        'pending'
-      ) {
-
-        gradesHtml +=
-          Student.pendingCard(c);
-
-        continue;
-
-      }
-
-
-      const grade =
-        await api(
+    // Fetch independent class grades concurrently instead of waiting for
+    // each network round-trip in sequence (especially slow on mobile).
+    // Limit concurrency to avoid overwhelming the serverless DB pool.
+    const gradeResults = new Array(classes.length);
+    let nextGradeIndex = 0;
+    async function loadNextGrade() {
+      while (nextGradeIndex < classes.length) {
+        const index = nextGradeIndex++;
+        const c = classes[index];
+        if (c.enrollment_status === 'pending') {
+          gradeResults[index] = Student.pendingCard(c);
+          continue;
+        }
+        const grade = await api(
           'GET',
           `/grades/${c.id}/students/${user.id}`
         ).catch(() => null);
-
-
-      gradesHtml +=
-        Student.classCard(
-          c,
-          grade
-        );
-
+        gradeResults[index] = Student.classCard(c, grade);
+      }
     }
+    await Promise.all(Array.from(
+      { length: Math.min(3, classes.length) },
+      () => loadNextGrade()
+    ));
+    let gradesHtml = gradeResults.join('');
 
 
     if (
@@ -6346,478 +6352,96 @@ ${esc(
       ).catch(() => ({}));
 
 
-    let totals =
-      await api(
-        'GET',
-        `/grading-denominators/${cid}`,
-        undefined,
-        { silentErrors: true }
-      ).catch(() => null);
-
-
-    // Older classes may not have the dynamic grading configuration yet.
-    // Initialize it once so Total Scores can be managed from this tab.
-    if (!totals) {
-
-      await api(
-        'POST',
-        `/grading-schemes/${cid}/initialize`,
-        {},
-        { silentErrors: true }
-      ).catch(() => null);
-
-
-      totals =
-        await api(
-          'GET',
-          `/grading-denominators/${cid}`,
-          undefined,
-          { silentErrors: true }
-        ).catch(() => null);
-
-    }
-
-
-    const configured =
-      totals?.configured || {};
-
-
-    const examConfiguredTotal =
-      Object.values(
-        configured.exams || {}
-      ).reduce(
-        (sum, n) =>
-          sum + Number(n || 0),
-        0
-      );
-
-
-    const configuredFor =
-      component => {
-
-        if (
-          component.source_type ===
-          'quiz'
-        ) {
-          return Number(
-            configured.quiz || 0
-          );
-        }
-
-        if (
-          component.source_type ===
-          'performance'
-        ) {
-          return Number(
-            configured.performance || 0
-          );
-        }
-
-        if (
-          component.source_type ===
-          'exam'
-        ) {
-          return examConfiguredTotal;
-        }
-
-        if (
-          component.source_type ===
-          'custom'
-        ) {
-          return Number(
-            configured.custom?.[
-              component.id
-            ] || 0
-          );
-        }
-
-        return null;
-
-      };
-
-
-    const totalScoreRows =
-      totals?.components
-        ?.map(
-          component => {
-
-            const used =
-              configuredFor(
-                component
-              );
-
-            const current =
-              component.max_points ??
-              '';
-
-            const isAttendance =
-              component.source_type ===
-              'attendance';
-
-            const subRows =
-              component.source_type === 'exam' &&
-              Array.isArray(
-                component.subcomponents
-              ) &&
-              component.subcomponents.length
-
-                ? component.subcomponents
-                    .map(
-                      sub => {
-
-                        const key =
-                          String(
-                            sub.source_filter ||
-                            sub.name ||
-                            ''
-                          )
-                            .trim()
-                            .toLowerCase();
-
-                        const subUsed =
-                          Number(
-                            configured.exams?.[
-                              key
-                            ] || 0
-                          );
-
-                        return `
-                          <div class="ml-5 mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2">
-                            <div>
-                              <div class="text-xs font-bold text-slate-700">
-                                ${esc(sub.name)}
-                              </div>
-                              <div class="text-[10px] text-slate-500">
-                                Configured exam points: ${subUsed}
-                              </div>
-                            </div>
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="any"
-                              data-total-subcomponent="${esc(sub.id)}"
-                              data-parent-component="${esc(component.id)}"
-                              value="${sub.max_points ?? ''}"
-                              placeholder="${subUsed || 'Total'}"
-                              class="w-full sm:w-28 px-3 py-2 rounded-xl border border-slate-300 text-sm font-bold text-right"
-                            >
-                          </div>
-                        `;
-
-                      }
-                    )
-                    .join('')
-
-                : '';
-
-
-            return `
-              <div
-                class="rounded-2xl
-                       border
-                       border-slate-200
-                       bg-white
-                       p-4"
-                data-total-component="${esc(component.id)}"
-              >
-
-                <div
-                  class="flex
-                         flex-col
-                         sm:flex-row
-                         sm:items-center
-                         sm:justify-between
-                         gap-3"
-                >
-
-                  <div>
-                    <div
-                      class="font-bold
-                             text-sm
-                             text-slate-800"
-                    >
-                      ${esc(component.name)}
-                    </div>
-
-                    <div
-                      class="text-xs
-                             text-slate-500
-                             mt-1"
-                    >
-                      ${
-                        isAttendance
-                          ? 'Maximum attendance days used for grading.'
-                          : `Configured assessment points: ${used ?? 0}`
-                      }
-                    </div>
-                  </div>
-
-
-                  <div
-                    class="flex
-                           items-center
-                           gap-2"
-                  >
-
-                    <input
-                      type="number"
-                      ${isAttendance ? 'min="1" step="1"' : 'min="0.01" step="any"'}
-                      data-total-max
-                      value="${current}"
-                      placeholder="${isAttendance ? 'Days' : (used || 'Total')}"
-                      class="w-28
-                             px-3
-                             py-2
-                             rounded-xl
-                             border
-                             border-slate-300
-                             text-sm
-                             font-bold
-                             text-right"
-                    >
-
-                    <span
-                      class="text-xs
-                             font-semibold
-                             text-slate-500
-                             w-12"
-                    >
-                      ${isAttendance ? 'days' : 'pts'}
-                    </span>
-
-                  </div>
-
-                </div>
-
-                ${subRows}
-
-              </div>
-            `;
-
-          }
-        )
-        .join('') || '';
-
-
-    const totalsLocked =
-      totals?.state ===
-      'finalized';
-
-
     box.innerHTML = `
 
       <div
-        class="grid
-               grid-cols-1
-               xl:grid-cols-2
-               gap-5"
+        class="glass-card
+               rounded-2xl
+               p-5
+               max-w-md"
       >
 
-        <div
-          class="glass-card
-                 rounded-2xl
-                 p-5"
+        <h4
+          class="font-bold
+                 mb-3"
         >
 
-          <h4
-            class="font-bold
-                   mb-1"
-          >
+          Grading Weights
+          (must total 100%)
 
-            Grading Weights
-            (must total 100%)
-
-          </h4>
-
-          <p
-            class="text-xs
-                   text-slate-500
-                   mb-4"
-          >
-            Controls how much each component contributes to the final grade.
-          </p>
+        </h4>
 
 
-          <form
-            onsubmit="return Teacher.saveWeights(event)"
-            class="space-y-3"
-          >
-
-            ${[
-              'attendance_weight',
-              'quiz_weight',
-              'performance_weight',
-              'exam_weight'
-            ]
-              .map(
-                k => `
-
-                  <div
-                    class="flex
-                           justify-between
-                           items-center
-                           gap-3"
-                  >
-
-                    <label
-                      class="text-sm
-                             capitalize"
-                    >
-
-                      ${k.replace(
-                        '_weight',
-                        ''
-                      )}
-
-                    </label>
-
-
-                    <div
-                      class="flex
-                             items-center
-                             gap-2"
-                    >
-                      <input
-                        type="number"
-                        step="any"
-                        id="w-${k}"
-                        value="${w[k] ?? 0}"
-                        class="w-24
-                               px-3
-                               py-2
-                               rounded-xl
-                               border
-                               border-slate-300
-                               text-sm
-                               text-right
-                               font-bold"
-                      >
-                      <span class="text-xs text-slate-500">%</span>
-                    </div>
-
-                  </div>
-
-                `
-              )
-              .join('')}
-
-
-            <button
-              class="w-full
-                     bg-eduBlue-600
-                     text-white
-                     py-2.5
-                     rounded-xl
-                     text-sm
-                     font-bold
-                     mt-3"
-            >
-
-              Save Weights
-
-            </button>
-
-          </form>
-
-        </div>
-
-
-        <div
-          class="glass-card
-                 rounded-2xl
-                 p-5"
+        <form
+          onsubmit="return Teacher.saveWeights(event)"
+          class="space-y-2"
         >
 
-          <div
-            class="flex
-                   items-start
-                   justify-between
-                   gap-3
-                   mb-1"
-          >
-            <div>
-              <h4
-                class="font-bold"
-              >
-                Component Total Scores
-              </h4>
-
-              <p
-                class="text-xs
-                       text-slate-500
-                       mt-1"
-              >
-                Edit the maximum total used for Attendance, Quiz,
-                Performance Task, and Exam calculations.
-              </p>
-            </div>
-
-            ${totals?.state
-              ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-                  totals.state === 'finalized'
-                    ? 'bg-slate-200 text-slate-600'
-                    : 'bg-emerald-100 text-emerald-700'
-                }">${esc(totals.state)}</span>`
-              : ''
-            }
-          </div>
-
-
-          ${!totals
-            ? `
-              <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Total Score settings could not be loaded. Refresh the page and try again.
-              </div>
-            `
-            : `
-              <form
-                onsubmit="return Teacher.saveTotalScores(event)"
-                class="mt-4 space-y-3"
-              >
-
-                ${totalScoreRows}
+          ${[
+            'attendance_weight',
+            'quiz_weight',
+            'performance_weight',
+            'exam_weight'
+          ]
+            .map(
+              k => `
 
                 <div
-                  class="rounded-xl
-                         bg-blue-50
-                         border
-                         border-blue-100
-                         px-4
-                         py-3
-                         text-xs
-                         text-blue-800"
+                  class="flex
+                         justify-between
+                         items-center"
                 >
-                  <i class="fa-solid fa-circle-info mr-1"></i>
-                  A Total Score cannot be lower than the assessment points already configured.
-                  If learner manual adjustments already exist for a component, remove those
-                  adjustments first before changing its maximum.
+
+                  <label
+                    class="text-sm
+                           capitalize"
+                  >
+
+                    ${k.replace(
+                      '_weight',
+                      ''
+                    )}
+
+                  </label>
+
+
+                  <input
+                    type="number"
+                    step="any"
+                    id="w-${k}"
+                    value="${w[k] ?? 0}"
+                    class="w-24
+                           px-2
+                           py-1
+                           rounded-lg
+                           border
+                           border-slate-300
+                           text-sm"
+                  >
+
                 </div>
 
+              `
+            )
+            .join('')}
 
-                <button
-                  type="submit"
-                  ${totalsLocked ? 'disabled' : ''}
-                  class="w-full
-                         bg-slate-900
-                         text-amber-300
-                         py-2.5
-                         rounded-xl
-                         text-sm
-                         font-black
-                         disabled:opacity-40
-                         disabled:cursor-not-allowed"
-                >
-                  <i class="fa-solid fa-floppy-disk mr-1"></i>
-                  ${totalsLocked
-                    ? 'Total Scores Locked'
-                    : 'Save Total Scores'}
-                </button>
 
-              </form>
-            `
-          }
+          <button
+            class="w-full
+                   bg-eduBlue-600
+                   text-white
+                   py-2
+                   rounded-xl
+                   text-sm
+                   font-bold
+                   mt-2"
+          >
 
-        </div>
+            Save Weights
+
+          </button>
+
+        </form>
 
       </div>
 
@@ -6865,102 +6489,6 @@ ${esc(
         'Grading weights updated.',
         'success'
       );
-
-    } catch {}
-
-
-    return false;
-
-  },
-
-
-  async saveTotalScores(e) {
-
-    e.preventDefault();
-
-
-    const components =
-      [
-        ...document.querySelectorAll(
-          '[data-total-component]'
-        )
-      ]
-        .map(
-          row => {
-
-            const input =
-              row.querySelector(
-                '[data-total-max]'
-              );
-
-            const raw =
-              String(
-                input?.value || ''
-              ).trim();
-
-            const subcomponents =
-              [
-                ...row.querySelectorAll(
-                  '[data-total-subcomponent]'
-                )
-              ]
-                .map(
-                  sub => {
-
-                    const subRaw =
-                      String(
-                        sub.value || ''
-                      ).trim();
-
-                    return {
-                      id:
-                        sub.dataset.totalSubcomponent,
-
-                      maxPoints:
-                        subRaw === ''
-                          ? null
-                          : Number(subRaw)
-                    };
-
-                  }
-                );
-
-
-            return {
-              id:
-                row.dataset.totalComponent,
-
-              maxPoints:
-                raw === ''
-                  ? null
-                  : Number(raw),
-
-              subcomponents
-            };
-
-          }
-        );
-
-
-    try {
-
-      const result =
-        await api(
-          'PUT',
-          `/grading-denominators/${Teacher.state.classId}`,
-          { components }
-        );
-
-
-      Toast.show(
-        'Total Scores Saved',
-        result.message ||
-          'Component total scores updated.',
-        'success'
-      );
-
-
-      await Teacher.renderWeights();
 
     } catch {}
 
