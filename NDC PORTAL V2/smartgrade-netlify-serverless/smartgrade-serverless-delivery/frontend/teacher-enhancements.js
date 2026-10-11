@@ -135,14 +135,14 @@
 
   Teacher.removeStudent = async function(studentId, studentName) {
     if (!confirm(`Remove ${studentName || 'this student'} from this class?\n\nThe student account and historical academic records will be preserved.`)) return;
-    try { await api('POST', `/classes/${Teacher.state.classId}/students/${studentId}/remove`); Toast.show('Student Removed', `${studentName || 'Student'} was removed from this class.`, 'success'); await Teacher.render(); } catch {}
+    try { await api('POST', `/classes/${Teacher.state.classId}/students/${studentId}/remove`); Toast.show('Student Removed', `${studentName || 'Student'} was removed from this class.`, 'success'); await Teacher.render({ refreshClasses: true }); } catch {}
   };
 
   Teacher.removeAllStudents = async function() {
     const cls = Teacher.getSelectedClass();
     const phrase = prompt(`Remove ALL active students from ${cls?.subject || 'this class'}?\n\nStudent accounts and historical records will be preserved. Pending requests will not be affected.\n\nType REMOVE ALL to confirm:`);
     if (phrase !== 'REMOVE ALL') { if (phrase !== null) Toast.show('Not Removed', 'Confirmation text did not match REMOVE ALL.', 'info'); return; }
-    try { const data = await api('POST', `/classes/${Teacher.state.classId}/students/remove-all`); Toast.show('Students Removed', data.message || 'All active students were removed.', 'success'); await Teacher.render(); } catch {}
+    try { const data = await api('POST', `/classes/${Teacher.state.classId}/students/remove-all`); Toast.show('Students Removed', data.message || 'All active students were removed.', 'success'); await Teacher.render({ refreshClasses: true }); } catch {}
   };
 
   Teacher.renderAttendance = async function() {
