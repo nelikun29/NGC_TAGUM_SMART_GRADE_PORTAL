@@ -42,7 +42,7 @@ async function ensureSingleDeviceSessionSchema() {
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS active_device_hash TEXT;
       ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS active_device_bound_at TIMESTAMPTZ;
+        ADD COLUMN IF NOT EXISTS active_device_bound_at TIMESTAMPTZ;\n      ALTER TABLE users ADD COLUMN IF NOT EXISTS active_session_id TEXT;
     `).catch(err => {
       singleDeviceSchemaReady = null;
       throw err;
