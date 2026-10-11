@@ -537,7 +537,7 @@ router.post('/login', async (req, res, next) => {
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
     if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
     const pendingClaim=user.role==='student'?(await pool.query(`SELECT id,claimed_student_number,status FROM student_id_claims WHERE claimant_user_id=$1 AND status IN ('pending','under_review') ORDER BY created_at DESC LIMIT 1`,[user.id])).rows[0]||null:null;
-    const token = signToken(user);
+    const token = signToken(user, sessionId);
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: {
       id: user.id,
@@ -563,8 +563,8 @@ router.post('/logout', authenticate, async (req, res, next) => {
        SET active_device_hash = NULL,
            active_device_bound_at = NULL,
            updated_at = now()
-       WHERE id = $1 AND active_device_hash = $2`,
-      [req.user.id, req.deviceHash]
+       WHERE id = $1 AND active_device_hash = $2 AND active_session_id = $3`,
+      [req.user.id, req.deviceHash, req.sessionId]
     );
     await audit(req, { action: 'logout', recordType: 'user', recordId: req.user.id });
     res.json({ message: 'Logged out.' });
