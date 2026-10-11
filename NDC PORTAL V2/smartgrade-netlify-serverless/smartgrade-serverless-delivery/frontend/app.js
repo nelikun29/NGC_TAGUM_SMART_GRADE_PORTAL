@@ -233,6 +233,7 @@ async function api(method, path, body, options = {}) {
       res.status === 401 &&
       hadToken &&
       path !== '/auth/login' &&
+      tokenAtStart === Store.token &&
       !options.suppressAuthFailure;
 
     if (isProtectedSessionFailure) {
@@ -248,6 +249,7 @@ async function api(method, path, body, options = {}) {
     if (
       !options.silentErrors &&
       (
+        path === '/auth/login' ||
         !sessionEnded ||
         (res.status !== 401 && res.status !== 403)
       )
@@ -1068,8 +1070,15 @@ const Auth = {
       }
 
 
-    } catch {
-      // Toast already shown.
+    } catch (error) {
+      // API errors display their own toast. Unexpected UI/runtime errors must
+      // not silently leave the user on the login form.
+      if (error?.name === 'AbortError') {
+        Toast.show('Sign-in interrupted', 'Please try signing in again.', 'error');
+      } else if (!(error instanceof Error) || !error.message) {
+        Toast.show('Sign-in failed', 'Please try again or contact the administrator.', 'error');
+      }
+      console.error('[Auth.login] Sign-in failed:', error);
     }
 
 
