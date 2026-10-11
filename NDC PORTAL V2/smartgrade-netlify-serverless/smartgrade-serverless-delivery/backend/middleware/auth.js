@@ -30,13 +30,16 @@ async function authenticate(req, res, next) {
     if (revoked.rows[0]) return res.status(401).json({ error: 'Session has been revoked. Please log in again.' });
     const { rows } = await pool.query(
       `SELECT id, role, email, is_active, approval_status,
-              account_verification_status, verification_note
+              account_verification_status, verification_note, session_version
        FROM users WHERE id = $1`,
       [payload.sub]
     );
     const user = rows[0];
     if (!user || !user.is_active || user.approval_status !== 'approved') {
       return res.status(401).json({ error: 'Account is not active. Please contact an administrator.' });
+    }
+    if ((payload.sv ?? 0) !== user.session_version) {
+      return res.status(401).json({ error: 'Session expired after account security change. Please log in again.' });
     }
     req.user = {
       id: user.id,
