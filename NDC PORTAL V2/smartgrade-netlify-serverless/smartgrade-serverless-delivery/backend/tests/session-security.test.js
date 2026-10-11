@@ -31,8 +31,11 @@ function loadMiddleware({ sessionVersion = 0, revoked = false } = {}) {
 }
 async function request(middleware, token) {
   const result = { statusCode:200, body:null, next:false };
+  const req = {headers:{authorization:'Bearer '+token}};
   const res = { status(code){result.statusCode=code;return this;},json(body){result.body=body;return this;} };
-  await middleware.authenticate({headers:{authorization:'Bearer '+token}},res,()=>{result.next=true;});
+  await middleware.authenticate(req,res,()=>{result.next=true;});
+  result.user = req.user;
+  result.sessionSecurity = req.sessionSecurity;
   return result;
 }
 test('current session version authenticates',async()=>{
@@ -51,4 +54,14 @@ test('invalid token is rejected before database access',async()=>{
   const {middleware,queries}=loadMiddleware({sessionVersion:1});
   assert.equal((await request(middleware,'invalid')).statusCode,401);
   assert.equal(queries.length,0);
+});
+
+test('revocation metadata is not exposed in user profile',async()=>{
+  const {middleware}=loadMiddleware({sessionVersion:1});
+  const result=await request(middleware,'current');
+  assert.equal(result.next,true);
+  assert.equal(Object.hasOwn(result.user,'sessionTokenHash'),false);
+  assert.equal(Object.hasOwn(result.user,'sessionExpiresAt'),false);
+  assert.match(result.sessionSecurity.tokenHash,/^[a-f0-9]{64}$/);
+  assert.ok(result.sessionSecurity.expiresAt instanceof Date);
 });
