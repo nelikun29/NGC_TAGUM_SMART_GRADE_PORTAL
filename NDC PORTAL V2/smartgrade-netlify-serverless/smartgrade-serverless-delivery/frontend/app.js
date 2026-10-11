@@ -25,13 +25,27 @@ const API_BASE = window.SMARTGRADE_API_BASE || '/api';
 
 const Store = {
   get token() {
-    return localStorage.getItem('sg_token');
+    // Each open tab retains its own authenticated session snapshot.
+    // A newer login in another tab cannot silently upgrade an older tab.
+    const tabToken = sessionStorage.getItem('sg_tab_token');
+    if (tabToken) return tabToken;
+    const saved = localStorage.getItem('sg_token');
+    if (saved) sessionStorage.setItem('sg_tab_token', saved);
+    return saved;
   },
 
   set token(v) {
-    v
-      ? localStorage.setItem('sg_token', v)
-      : localStorage.removeItem('sg_token');
+    if (v) {
+      sessionStorage.setItem('sg_tab_token', v);
+      localStorage.setItem('sg_token', v);
+    } else {
+      const tabToken = sessionStorage.getItem('sg_tab_token');
+      sessionStorage.removeItem('sg_tab_token');
+      // Never erase a newer login belonging to a different tab.
+      if (!tabToken || localStorage.getItem('sg_token') === tabToken) {
+        localStorage.removeItem('sg_token');
+      }
+    }
   },
 
   get user() {
