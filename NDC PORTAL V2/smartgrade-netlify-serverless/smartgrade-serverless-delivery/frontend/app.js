@@ -25,13 +25,27 @@ const API_BASE = window.SMARTGRADE_API_BASE || '/api';
 
 const Store = {
   get token() {
-    return localStorage.getItem('sg_token');
+    // Each open tab retains its own authenticated session snapshot.
+    // A newer login in another tab cannot silently upgrade an older tab.
+    const tabToken = sessionStorage.getItem('sg_tab_token');
+    if (tabToken) return tabToken;
+    const saved = localStorage.getItem('sg_token');
+    if (saved) sessionStorage.setItem('sg_tab_token', saved);
+    return saved;
   },
 
   set token(v) {
-    v
-      ? localStorage.setItem('sg_token', v)
-      : localStorage.removeItem('sg_token');
+    if (v) {
+      sessionStorage.setItem('sg_tab_token', v);
+      localStorage.setItem('sg_token', v);
+    } else {
+      const tabToken = sessionStorage.getItem('sg_tab_token');
+      sessionStorage.removeItem('sg_tab_token');
+      // Never erase a newer login belonging to a different tab.
+      if (!tabToken || localStorage.getItem('sg_token') === tabToken) {
+        localStorage.removeItem('sg_token');
+      }
+    }
   },
 
   get user() {
@@ -132,7 +146,8 @@ const SessionGuard = {
     } catch {}
 
     Store.token = null;
-    Store.user = null;
+    // Another tab may already have a newer valid login; do not clear it.
+    if (!localStorage.getItem('sg_token')) Store.user = null;
 
     try {
       Views.renderForRole();
@@ -1623,40 +1638,31 @@ const Student = {
       ).catch(() => []);
 
 
-    let gradesHtml = '';
-
-
-    for (
-      const c of classes
-    ) {
-
-      if (
-        c.enrollment_status ===
-        'pending'
-      ) {
-
-        gradesHtml +=
-          Student.pendingCard(c);
-
-        continue;
-
-      }
-
-
-      const grade =
-        await api(
+    // Fetch independent class grades concurrently instead of waiting for
+    // each network round-trip in sequence (especially slow on mobile).
+    // Limit concurrency to avoid overwhelming the serverless DB pool.
+    const gradeResults = new Array(classes.length);
+    let nextGradeIndex = 0;
+    async function loadNextGrade() {
+      while (nextGradeIndex < classes.length) {
+        const index = nextGradeIndex++;
+        const c = classes[index];
+        if (c.enrollment_status === 'pending') {
+          gradeResults[index] = Student.pendingCard(c);
+          continue;
+        }
+        const grade = await api(
           'GET',
           `/grades/${c.id}/students/${user.id}`
         ).catch(() => null);
-
-
-      gradesHtml +=
-        Student.classCard(
-          c,
-          grade
-        );
-
+        gradeResults[index] = Student.classCard(c, grade);
+      }
     }
+    await Promise.all(Array.from(
+      { length: Math.min(3, classes.length) },
+      () => loadNextGrade()
+    ));
+    let gradesHtml = gradeResults.join('');
 
 
     if (
