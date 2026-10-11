@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { pool } = require('../db');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -24,6 +25,9 @@ async function authenticate(req, res, next) {
   }
 
   try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const revoked = await pool.query('SELECT 1 FROM revoked_sessions WHERE token_hash=$1 AND expires_at>now()', [tokenHash]);
+    if (revoked.rows[0]) return res.status(401).json({ error: 'Session has been revoked. Please log in again.' });
     const { rows } = await pool.query(
       `SELECT id, role, email, is_active, approval_status,
               account_verification_status, verification_note
@@ -38,6 +42,8 @@ async function authenticate(req, res, next) {
       id: user.id,
       role: user.role,
       email: user.email,
+      sessionTokenHash: tokenHash,
+      sessionExpiresAt: new Date(payload.exp * 1000),
       accountVerificationStatus: user.account_verification_status || 'verified',
       verificationNote: user.verification_note || null
     };
