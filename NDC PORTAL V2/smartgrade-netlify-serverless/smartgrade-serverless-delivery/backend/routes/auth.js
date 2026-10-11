@@ -522,19 +522,15 @@ router.post('/login', async (req, res, next) => {
        SET failed_login_attempts = 0,
            locked_until = NULL,
            active_device_hash = $1,
-           active_device_bound_at = COALESCE(active_device_bound_at, now()),
+           active_device_bound_at = now(),
            updated_at = now()
        WHERE id = $2
-         AND (active_device_hash IS NULL OR active_device_hash = $1)
        RETURNING id`,
       [deviceHash, user.id]
     )).rows[0];
 
     if (!bound) {
-      return res.status(409).json({
-        error: 'This account is already signed in on another device. Log out from that device first or ask an administrator to reset the device session.',
-        code: 'ACCOUNT_ACTIVE_ON_ANOTHER_DEVICE'
-      });
+      return res.status(500).json({ error: 'Unable to establish a device session. Please try again.' });
     }
 
     let profile = null;
