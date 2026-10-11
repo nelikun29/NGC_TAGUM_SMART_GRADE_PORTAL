@@ -2267,6 +2267,8 @@ const Teacher = {
 
   _classesLoadedAt: 0,
 
+  _classesLoadPromise: null,
+
   classCacheMaxAgeMs: 60000,
 
 
@@ -2285,24 +2287,59 @@ const Teacher = {
     }
 
 
-    const classes =
-      await api(
+    // Coalesce simultaneous requests. Teacher.render() and the approval
+    // badge can start at the same time after login; both should share one
+    // /classes request instead of waking Neon twice.
+
+    if (Teacher._classesLoadPromise) {
+
+      return Teacher._classesLoadPromise;
+
+    }
+
+
+    Teacher._classesLoadPromise =
+      api(
         'GET',
         '/classes'
-      ).catch(() => []);
+      )
+        .then(classes => {
+
+          Teacher._classes =
+            Array.isArray(classes)
+              ? classes
+              : [];
 
 
-    Teacher._classes =
-      Array.isArray(classes)
-        ? classes
-        : [];
+          Teacher._classesLoadedAt =
+            Date.now();
 
 
-    Teacher._classesLoadedAt =
-      Date.now();
+          return Teacher._classes;
+
+        })
+        .catch(() => {
+
+          Teacher._classes =
+            [];
 
 
-    return Teacher._classes;
+          Teacher._classesLoadedAt =
+            Date.now();
+
+
+          return Teacher._classes;
+
+        })
+        .finally(() => {
+
+          Teacher._classesLoadPromise =
+            null;
+
+        });
+
+
+    return Teacher._classesLoadPromise;
 
   },
 
@@ -3838,7 +3875,9 @@ const Teacher = {
       }
 
 
-      await Teacher.render();
+      await Teacher.render({
+        refreshClasses: true
+      });
 
 
       ApprovalManager.forceRefresh();
@@ -4392,7 +4431,9 @@ const Teacher = {
         classId;
 
 
-      await Teacher.render();
+      await Teacher.render({
+        refreshClasses: true
+      });
 
 
     } catch {}
@@ -5169,7 +5210,9 @@ ${esc(
       );
 
 
-      await Teacher.render();
+      await Teacher.render({
+        refreshClasses: true
+      });
 
 
       ApprovalManager.forceRefresh();
@@ -5198,7 +5241,9 @@ ${esc(
       );
 
 
-      await Teacher.render();
+      await Teacher.render({
+        refreshClasses: true
+      });
 
 
       ApprovalManager.forceRefresh();
