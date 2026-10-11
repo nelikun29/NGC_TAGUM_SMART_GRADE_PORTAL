@@ -1,7 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const { pool } = require('../db');
 const { JWT_SECRET, authenticate, requireRole } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
@@ -18,12 +17,8 @@ function requireStudentRole(req,res,next){
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
-function hashDeviceToken(value) {
-  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
-}
-
-function signToken(user, sessionId) {
-  return jwt.sign({ sub: user.id, role: user.role, sid: sessionId }, JWT_SECRET, { expiresIn: '30d' });
+function signToken(user) {
+  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // ---------- STUDENT REGISTRATION ----------
@@ -481,14 +476,10 @@ router.post('/password-reset-requests/:requestId/dismiss', authenticate, require
 // the route handler executes in the Netlify serverless request environment.
 router.post('/login', async (req, res, next) => {
   try {
-    const { email, password, deviceToken } = req.body || {};
+    const { email, password } = req.body || {};
     if (!isNonEmptyString(String(email || '')) || !isNonEmptyString(String(password || ''))) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
-    if (!isNonEmptyString(String(deviceToken || '')) || String(deviceToken).trim().length < 32) {
-      return res.status(400).json({ error: 'A valid device session is required. Refresh the page and try again.' });
-    }
-    const deviceHash = hashDeviceToken(String(deviceToken).trim());
     const normalizedEmail = String(email).trim().toLowerCase();
     const { rows } = await pool.query(`SELECT * FROM users WHERE lower(email) = $1`, [normalizedEmail]);
     const user = rows[0];
@@ -517,29 +508,17 @@ router.post('/login', async (req, res, next) => {
     if (user.approval_status === 'pending') return res.status(403).json({ error: 'Your account is pending administrator approval.' });
     if (user.approval_status === 'rejected') return res.status(403).json({ error: 'Your registration was not approved. Contact an administrator.' });
     if (user.account_verification_status === 'rejected') return res.status(403).json({ error: 'This account did not pass identity verification. Contact an administrator.' });
-    const sessionId = crypto.randomUUID();
-    const bound = (await pool.query(
-      `UPDATE users
-       SET failed_login_attempts = 0,
-           locked_until = NULL,
-           active_device_hash = $1,
-           active_session_id = $3,
-           active_device_bound_at = now(),
-           updated_at = now()
-       WHERE id = $2
-       RETURNING id`,
-      [deviceHash, user.id, sessionId]
-    )).rows[0];
-
-    if (!bound) {
-      return res.status(500).json({ error: 'Unable to establish a device session. Please try again.' });
-    }
+    // Clear failed-login counters without revoking other valid JWT sessions.
+    await pool.query(
+      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1',
+      [user.id]
+    );
 
     let profile = null;
     if (user.role === 'student') profile = (await pool.query(`SELECT * FROM students WHERE id = $1`, [user.id])).rows[0] || null;
     if (user.role === 'teacher') profile = (await pool.query(`SELECT * FROM teachers WHERE id = $1`, [user.id])).rows[0] || null;
     const pendingClaim=user.role==='student'?(await pool.query(`SELECT id,claimed_student_number,status FROM student_id_claims WHERE claimant_user_id=$1 AND status IN ('pending','under_review') ORDER BY created_at DESC LIMIT 1`,[user.id])).rows[0]||null:null;
-    const token = signToken(user, sessionId);
+    const token = signToken(user);
     await audit(req, { action: 'login', recordType: 'user', recordId: user.id });
     res.json({ token, user: {
       id: user.id,
@@ -560,17 +539,9 @@ router.post('/login', async (req, res, next) => {
 
 router.post('/logout', authenticate, async (req, res, next) => {
   try {
-    await pool.query(
-      `UPDATE users
-       SET active_device_hash = NULL,
-           active_session_id = NULL,
-           active_device_bound_at = NULL,
-           updated_at = now()
-       WHERE id = $1 AND active_device_hash = $2 AND active_session_id = $3`,
-      [req.user.id, req.deviceHash, req.sessionId]
-    );
+    // JWT is discarded by the requesting browser only; other sessions remain valid.
     await audit(req, { action: 'logout', recordType: 'user', recordId: req.user.id });
-    res.json({ message: 'Logged out.' });
+    res.json({ message: 'Logged out of this browser.' });
   } catch (e) { next(e); }
 });
 
