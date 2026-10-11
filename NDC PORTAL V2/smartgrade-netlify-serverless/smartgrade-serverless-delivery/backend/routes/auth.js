@@ -349,6 +349,14 @@ router.post('/forgot-password', async (req, res, next) => {
     const tokenHash=crypto.createHash('sha256').update(rawToken).digest('hex');
     const requestId=crypto.randomUUID();
 
+    // Throttle reset requests per account using persisted request timestamps.
+    // Generic responses avoid disclosing whether the address is registered.
+    const recent=(await pool.query(
+      "SELECT requested_at FROM password_reset_requests WHERE user_id=$1 AND status='pending' ORDER BY requested_at DESC LIMIT 1",
+      [user.id]
+    )).rows[0];
+    if(recent && Date.now()-new Date(recent.requested_at).getTime()<5*60*1000)return res.json(generic);
+
     const existing=(await pool.query("SELECT id FROM password_reset_requests WHERE user_id=$1 AND status='pending'",[user.id])).rows[0];
     if(existing){
       await pool.query(
