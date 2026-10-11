@@ -41,12 +41,11 @@ async function authenticate(req, res, next) {
     if ((payload.sv ?? 0) !== user.session_version) {
       return res.status(401).json({ error: 'Session expired after account security change. Please log in again.' });
     }
+    req.sessionSecurity = { tokenHash, expiresAt: new Date(payload.exp * 1000) };
     req.user = {
       id: user.id,
       role: user.role,
       email: user.email,
-      sessionTokenHash: tokenHash,
-      sessionExpiresAt: new Date(payload.exp * 1000),
       accountVerificationStatus: user.account_verification_status || 'verified',
       verificationNote: user.verification_note || null
     };
