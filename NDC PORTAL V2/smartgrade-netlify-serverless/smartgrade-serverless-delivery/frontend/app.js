@@ -125,8 +125,14 @@ const SessionGuard = {
   },
 
   handleUnauthorized(message, currentController = null, requestToken = null) {
-    // Ignore a 401 from an earlier login that completed after session rotation.
+    // Ignore late failures from requests that began before the current login.
     if (requestToken && requestToken !== Store.token) return;
+    // Older cached backend/frontend builds may still emit the retired single-session
+    // message. It must not revoke a valid multi-device session; report it for diagnosis.
+    if (/newer login has ended this session/i.test(String(message || ''))) {
+      console.warn('[SessionGuard] Ignored obsolete single-session rejection. Refresh the portal if requests continue failing.');
+      return;
+    }
     if (this.loggingOut || this.authFailureHandled) return;
 
     this.authFailureHandled = true;
