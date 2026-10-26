@@ -32,7 +32,11 @@ router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,asyn
     const oldMax=num(c.max_points);
     const requestedMax=num(item.maxPoints);
     const maxChanged=(oldMax===null)!==(requestedMax===null)||(oldMax!==null&&requestedMax!==null&&Math.abs(oldMax-requestedMax)>0.0001);
-    if(maxChanged&&await componentHasAdjustments(req.params.classId,c.component_key,client)){
+    // Attendance denominator changes must not force teachers to delete learner
+    // adjustments. Keep every adjustment row intact; the normal grading engine
+    // will apply the existing adjustment against the newly configured denominator.
+    // Other component types retain the original lock until their own safe workflow exists.
+    if(maxChanged && c.source_type !== 'attendance' && await componentHasAdjustments(req.params.classId,c.component_key,client)){
       await client.query('ROLLBACK');
       return res.status(409).json({error:`${c.name} has learner manual adjustments. Remove those adjustments before changing its Total Score.`});
     }
@@ -67,6 +71,6 @@ router.put('/:classId',requireRole('teacher','admin'),requireClassOwnership,asyn
     }
   }
   await client.query('COMMIT');try{await audit(req,{action:'grading_denominator_update',recordType:'grading_scheme',recordId:scheme.id,newValue:{classId:req.params.classId}});}catch(e){console.error('Audit logging failed:',e);}
-  res.json({message:'Overall total scores saved.'});
+  res.json({message:'Overall total scores saved. Existing learner manual adjustments were preserved.'});
 }catch(e){try{await client.query('ROLLBACK');}catch{}next(e);}finally{client.release();}});
 module.exports=router;
