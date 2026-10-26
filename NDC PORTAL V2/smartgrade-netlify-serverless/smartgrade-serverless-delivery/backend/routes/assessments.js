@@ -286,11 +286,11 @@ router.put('/exams/:examId/scores/:studentId', requireRole('teacher', 'admin'), 
     if (!check.valid) return res.status(400).json({ error: check.message });
 
     if (existing) {
-      await pool.query(`UPDATE exam_scores SET raw_score=$1, remarks=$2, updated_at=now() WHERE id=$3`, [rawScore, remarks || null, existing.id]);
+      await pool.query(`UPDATE exam_scores SET raw_score=$1, remarks=$2, verification_status='verified', updated_at=now() WHERE id=$3`, [rawScore, remarks || null, existing.id]);
       await audit(req, { action: 'score_modification', recordType: 'exam_score', recordId: existing.id, previousValue: existing.raw_score, newValue: rawScore });
     } else {
       const id = crypto.randomUUID();
-      await pool.query(`INSERT INTO exam_scores (id, exam_id, student_id, raw_score, remarks) VALUES ($1, $2, $3, $4, $5)`, [id, exam.id, req.params.studentId, rawScore, remarks || null]);
+      await pool.query(`INSERT INTO exam_scores (id, exam_id, student_id, raw_score, remarks, verification_status) VALUES ($1, $2, $3, $4, $5, 'verified')`, [id, exam.id, req.params.studentId, rawScore, remarks || null]);
       await audit(req, { action: 'score_creation', recordType: 'exam_score', recordId: id, newValue: rawScore });
     }
     res.json({ message: 'Exam score saved.' });
